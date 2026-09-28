@@ -20,4 +20,9 @@ def validate_and_process_logic(raw_ai_response):
     if not isinstance(data["risk_score"], (int, float)):
         raise TypeError("Schema Validation Failed: 'risk_score' must be a number.")
 
+    # Deterministic safety rule override: >= 70% or High risk means unsafe
+    if data["risk_score"] >= 70 or str(data["risk_level"]).lower() == "high":
+        data["is_safe"] = False
+        data["risk_level"] = "High"
+
     return data
