@@ -1,4 +1,0 @@
-#These are some prerequisites needed for the program to work // run pip install -r requirements.txt on your terminal
-google-genai
-python-dotenv
-requests
