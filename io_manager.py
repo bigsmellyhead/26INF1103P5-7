@@ -1,4 +1,16 @@
 # io_manager.py
+from data_manager import get_user_profile, save_user_profile
+
+DIVIDER = "=" * 46
+SECTION = "-" * 46
+
+RESTRICTIONS_PROMPT = (
+    # --- Prompt for User ---
+    "Enter your allergies/restrictions, separated by commas\n"
+    "(e.g. peanuts, seafood, g6pd, tree nuts): ")
+
+
+# Output hidden ingredients in a tree format
 def print_hidden_ingredients_tree(result_data):
     symbol_startTree = "├── "
     symbol_endTree = "└── "
@@ -25,6 +37,7 @@ def print_hidden_ingredients_tree(result_data):
                     output = indent+symbol_startTree
                 print(output+"["+ingredient+"]")
 
+# Output the final audit result to the user in a clear format
 
 def display_audit_result(username, stall, dish, restrictions, result_data):
 
@@ -59,3 +72,88 @@ def display_audit_result(username, stall, dish, restrictions, result_data):
     print("⚠️  ADVISORY DISCLAIMER: This tool is advisory only.")
     print("   Always verify with store owners for safety.")
     print("==============================================\n")
+    print("==============================================\n")
+
+# Input handling for restrictions
+def parse_restrictions(raw_text):
+    # --- Spliting of Allergies / Restrictions by commas "," ---
+    """Split comma-separated input into a clean list. Returns ['none'] if empty."""
+    items = [r.strip().lower() for r in raw_text.split(",") if r.strip()]
+    return items if items else ["none"]
+
+# Input restrictions display
+def prompt_for_restrictions():
+    # --- Prompts the user for Restrictions and Returns ---
+    """Asks the user for their restrictions and returns them as a clean list."""
+    raw_restrictions = input(RESTRICTIONS_PROMPT)
+    return parse_restrictions(raw_restrictions)
+
+# Input handling for user authentication
+def handle_user_authentication():
+    """Handles existing user check, profile editing, or new user registration."""
+
+    # --- App banner ---
+    print(f"\n{DIVIDER}")
+    print("   HAWKER DIETARY & INGREDIENT SAFETY AUDITOR")
+    print(f"{DIVIDER}\n")
+
+    # --- Get and validate username ---
+    username = input("Enter your username: ").strip()
+
+    if not username:
+        # Fall back to a default rather than letting an empty username through
+        print("\nUsername cannot be empty. Defaulting to 'guest'.")
+        username = "guest"
+
+    # Look up this username in the saved profiles (returns None if new)
+    user_profile = get_user_profile(username)
+
+    if user_profile:
+        # --- Existing user: show their saved data ---
+        print(f"\nWelcome back, {user_profile['username']}!")
+        print(f"Current saved restrictions: {', '.join(user_profile['restrictions'])}\n")
+
+        # Loop until the user gives a valid y/n answer
+        while True:
+            update_choice = input("Would you like to update your dietary restrictions? (y/n): ").strip().lower()
+            if update_choice in ['y', 'n']:
+                break
+            print("Please enter only 'y' or 'n'.")
+
+        if update_choice == 'y':
+            # --- User wants to overwrite their restrictions ---
+            print()
+            restrictions = prompt_for_restrictions()
+
+            # Overwrite the profile in the JSON database
+            save_user_profile(username, restrictions)
+            print(f"\nProfile updated! Saved {len(restrictions)} restriction(s): {', '.join(restrictions)}")
+        else:
+            # --- User declined to update: keep existing restrictions as-is ---
+            print("No updates made.")
+            restrictions = user_profile['restrictions']
+    else:
+        # --- New user: walk them through initial setup ---
+        print(f"\nNew user detected ('{username}'). Let's set up your dietary profile.")
+        restrictions = prompt_for_restrictions()
+
+        # Create the profile for the first time
+        save_user_profile(username, restrictions)
+        print(f"\nProfile saved for {username}! Saved {len(restrictions)} restriction(s): {', '.join(restrictions)}")
+
+    # Hand back the username and their current (possibly just-updated) restrictions
+    return username, restrictions
+
+# Input handling for stall and dish
+def get_user_inputs():
+    """Prompts the user for the stall and dish they want to audit."""
+    # --- Audit section header ---
+    print(f"\n{SECTION}")
+    print(" NEW DISH AUDIT")
+    print(f"{SECTION}\n")
+
+    # --- Collect the two pieces of info needed to run the audit ---
+    stall = input("Enter Hawker Centre or Stall Name (e.g., Maxwell Food Centre): ").strip()
+    dish = input("Enter Dish Name (e.g., Chicken Rice): ").strip()
+
+    return stall, dish
