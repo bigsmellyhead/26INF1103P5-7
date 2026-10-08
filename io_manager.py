@@ -18,24 +18,28 @@ def print_hidden_ingredients_tree(result_data):
     print("---------------------------------------------------------")
     print("🔍  Trigger Breakdown")
     print("---------------------------------------------------------")
-    allergen_list = result_data.get('hidden_ingredients')
-    for index, allergen_dict in enumerate(allergen_list):
-        if(index == len(allergen_list)-1):
-            output = symbol_endTree
-            indent = 5 * " "
-        else:
-            output = symbol_startTree
-            indent = "│" + 4 * " "
+
+   
+    allergen_list = result_data.get('hidden_ingredients') or []
+
+     # Fallback if the AI returned a flat list of strings instead of dicts
+
+    if allergen_list and all(isinstance(item, str) for item in allergen_list):
+        allergen_list = [{"Hidden ingredients": allergen_list}]
+
+    for i, allergen_dict in enumerate(allergen_list):
+        if not isinstance(allergen_dict, dict):
+            continue
+
+        is_last_allergen = (i == len(allergen_list) - 1)
+        branch = symbol_endTree if is_last_allergen else symbol_startTree
+        indent = 5 * " " if is_last_allergen else "│" + 4 * " "
 
         for allergen, ingredients in allergen_dict.items():
-            print(output+"["+allergen+"]")
-            for index,ingredient in enumerate(ingredients):
-                
-                if(index == len(ingredients)-1):
-                    output = indent+symbol_endTree
-                else:
-                    output = indent+symbol_startTree
-                print(output+"["+ingredient+"]")
+            print(branch + "[" + allergen + "]")
+            for j, ingredient in enumerate(ingredients):
+                leaf = symbol_endTree if j == len(ingredients) - 1 else symbol_startTree
+                print(indent + leaf + "[" + ingredient + "]")
 
 # Output the final audit result to the user in a clear format
 def display_audit_result(username, stall, dish, restrictions, result_data):
