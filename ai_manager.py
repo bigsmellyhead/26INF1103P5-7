@@ -28,7 +28,7 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
     - "risk_level": string ("Low", "Medium", or "High")
     - "risk_score": number (0 to 100 integer representing risk percentage)
     - "stall_specific_insights": string (analysis of stall/hawker culture/hidden ingredients)
-    - "hidden_ingredients": list of strings (potential unlisted ingredients or components)
+    - "hidden_ingredients": list of objects, each mapping one of the user's restrictions to a list of hidden ingredient strings that trigger it, e.g. [{{"peanuts": ["sambal", "fried peanuts"]}}, {{"seafood": ["belacan", "ikan bilis"]}}]
     - "reasoning": string (short explanation of why it is safe or unsafe)
     """
 
