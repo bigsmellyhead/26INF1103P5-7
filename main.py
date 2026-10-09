@@ -1,4 +1,5 @@
 from io_manager import handle_user_authentication, get_user_inputs, display_audit_result
+from ai_manager import query_ai_safety_auditor
 from logic_manager import validate_and_process_logic
 from data_manager import initialize_database, append_audit_log
 
@@ -19,14 +20,8 @@ def main():
         try:
             print("\nProcessing audit with temporary local reasoning engine...")
 
-            # Temporary replacement for ai_manager
-            raw_ai_output = {
-                "stall": stall,
-                "dish": dish,
-                "restrictions": restrictions,
-                "safe": True,
-                "reason": "Temporary audit result. AI safety auditor not yet connected."
-            }
+             # Query LLM API
+            raw_ai_output = query_ai_safety_auditor(stall, dish, restrictions)
 
             # Validate schema and enforce rules
             processed_data = validate_and_process_logic(raw_ai_output)
