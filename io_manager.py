@@ -3,6 +3,10 @@ from data_manager import get_user_profile, save_user_profile
 
 DIVIDER = "=" * 46
 SECTION = "-" * 46
+COLOR_RED = "\033[31m"
+COLOR_YELLOW = "\033[33m"
+COLOR_GREEN = "\033[32m"
+COLOR_RESET= "\033[0m"
 
 RESTRICTIONS_PROMPT = (
     # --- Prompt for User ---
@@ -17,10 +21,6 @@ def print_user_restrictions(restrictions):
 
 def print_risk_assessment(result_data):
     # ANSI Colour definitions
-    COLOR_RED = "\033[31m"
-    COLOR_YELLOW = "\033[33m"
-    COLOR_GREEN = "\033[32m"
-    COLOR_RESET= "\033[0m"
     CURRENT_COLOR = ""
     #Analyse Risk Score and assign color codes based on risk score
     match(result_data.get('risk_level')):
@@ -77,12 +77,19 @@ def print_children_tree(starting_node, prefix = ""):
     for index, child in enumerate(children):
         child_name = child["name"]
         child_status = child["status"]
+        child_conflict = child["conflict"]
+        child_verdict = ""
+
+        if(child_conflict and child_status == "Trigger"):
+            child_verdict = f"{COLOR_RED}<-----[{child_status}: {child_conflict}]{COLOR_RESET}"
+        else:
+            child_verdict = f"{COLOR_GREEN}({child_status}){COLOR_RESET}"
 
         if(index == len(children) - 1):
-             print(f"{prefix}{symbol_endTree}{child_name} ({child_status})")
+             print(f"{prefix}{symbol_endTree}{child_name} {child_verdict}")
              indentation = "    "
         else:
-             print(f"{prefix}{symbol_startTree}{child_name} ({child_status})")
+             print(f"{prefix}{symbol_startTree}{child_name} {child_verdict}")
              indentation = "│   "
 
         if child["children"]:
@@ -91,7 +98,6 @@ def print_children_tree(starting_node, prefix = ""):
 
 # Output the final audit result to the user in a clear format
 def display_audit_result(username, stall, dish, restrictions, result_data):
-    print(result_data)
     """Displays the final processed audit report clearly to the user."""
     print("======================================================================")
     print("                         DISH SAFETY AUDIT            ")
