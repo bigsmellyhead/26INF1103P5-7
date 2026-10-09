@@ -173,6 +173,55 @@ def show_category_menu(menu_entries, selected, custom_items):
     print("  D = Done    C = Clear everything")
     print(f"\nCurrently selected: {', '.join(sorted(selected)) if selected else 'none'}")
 
+def run_item_menu(title, items, selected, allow_custom=False):
+
+    while True:
+        print(f"\n{SECTION}")
+        print(f" {title}")
+        print(SECTION)
+
+        if not items:
+            print("  (nothing here yet)")
+        for number, item in enumerate(items, start=1):
+            mark = "x" if item.lower() in selected else " "
+            print(f"  {number}. [{mark}] {item}")
+
+        print("\n  Enter numbers to tick/untick (e.g. 1,3)")
+        extras = "  A = Select all    N = Select none"
+        if allow_custom:
+            extras += "    T = Type a new one"
+        print(extras)
+        print("  B = Back")
+
+        choice = input("Your choice: ").strip().lower()
+
+        if choice == "b":
+            return
+        elif choice == "a":
+            selected.update(item.lower() for item in items)
+        elif choice == "n":
+            selected.difference_update(item.lower() for item in items)
+        elif choice == "t" and allow_custom:
+            raw = input(CUSTOM_PROMPT)
+            for new_item in parse_restrictions(raw):
+                if new_item == "none":
+                    continue
+                if new_item not in items:
+                    items.append(new_item)
+                selected.add(new_item)
+        else:
+            numbers = parse_number_list(choice, len(items))
+            if numbers is None:
+                print("Invalid choice. Please try again.")
+                continue
+            
+            for number in set(numbers):
+                item = items[number - 1].lower()
+                if item in selected:
+                    selected.remove(item)
+                else:
+                    selected.add(item)
+
 # Input handling for user authentication
 def handle_user_authentication():
     """Handles existing user check, profile editing, or new user registration."""
