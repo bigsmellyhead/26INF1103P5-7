@@ -1,8 +1,8 @@
 # io_manager.py
 from data_manager import get_user_profile, save_user_profile
 
-DIVIDER = "=" * 46
-SECTION = "-" * 46
+DIVIDER = f"----------------------------------------------------------------------"
+SECTION = f"----------------------------------------------------------------------"
 COLOR_RED = "\033[31m"
 COLOR_YELLOW = "\033[33m"
 COLOR_GREEN = "\033[32m"
@@ -28,7 +28,7 @@ def print_risk_assessment(result_data):
             CURRENT_COLOR = COLOR_RED
         case("Medium"):
             CURRENT_COLOR = COLOR_YELLOW
-        case(Low):
+        case("Low"):
             CURRENT_COLOR = COLOR_GREEN
 
     safety_status = "SAFE TO EAT" if result_data.get('is_safe') else "NOT SAFE / AVOID"
@@ -104,18 +104,16 @@ def display_audit_result(username, stall, dish, restrictions, result_data):
     print("======================================================================")
     print(f"[DISH] {dish}")
     print(f"[LOCATION/STALL] {stall}\n")
-
+    
     print(f"[USERNAME] {username}")
     print(f"[USER PROFILE & RESTRICTIONS]")
     print_user_restrictions(restrictions)
     print_risk_assessment(result_data)
 
-    print("----------------------------------------------------------------------\n")
     print_allergy_conflicts(result_data)
     print("")
     print_dietary_status(result_data)
-    print("\n----------------------------------------------------------------------")
-
+    print("")
     print_ingredient_breakdown_tree(result_data)
 
     #print(f"Stall Insights: ")
