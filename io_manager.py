@@ -146,6 +146,33 @@ def parse_number_list(raw_text, max_value):
         return None
     return numbers
 
+def show_category_menu(menu_entries, selected, custom_items):
+    # --- Level 1: Allergies first, then Restrictions, then Other ---
+    # menu_entries is a list of (group, title, items) tuples
+    print(f"\n{SECTION}")
+    print(" SELECT YOUR ALLERGIES / RESTRICTIONS")
+    print(SECTION)
+
+    last_group = None
+    for number, (group, title, items) in enumerate(menu_entries, start=1):
+        # Print a group header (ALLERGIES / RESTRICTIONS) whenever the group changes
+        if group != last_group:
+            print(f"\n  {group.upper()}")
+            last_group = group
+
+        ticked = sum(1 for item in items if item.lower() in selected)
+        tag = f"  ({ticked} selected)" if ticked else ""
+        print(f"    {number}. {title}{tag}")
+
+    ticked_custom = sum(1 for item in custom_items if item in selected)
+    tag = f"  ({ticked_custom} selected)" if ticked_custom else ""
+    print("\n  OTHER")
+    print(f"    {len(menu_entries) + 1}. Other (type your own){tag}")
+
+    print("\n  Enter a number to open it.")
+    print("  D = Done    C = Clear everything")
+    print(f"\nCurrently selected: {', '.join(sorted(selected)) if selected else 'none'}")
+
 # Input handling for user authentication
 def handle_user_authentication():
     """Handles existing user check, profile editing, or new user registration."""
