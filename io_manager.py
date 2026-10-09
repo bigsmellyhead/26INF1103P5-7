@@ -1,8 +1,8 @@
 # io_manager.py
 from data_manager import get_user_profile, save_user_profile
 
-DIVIDER = f"----------------------------------------------------------------------"
-SECTION = f"----------------------------------------------------------------------"
+DIVIDER = "=" * 70
+SECTION = "-" * 70
 COLOR_RED = "\033[31m"
 COLOR_YELLOW = "\033[33m"
 COLOR_GREEN = "\033[32m"
