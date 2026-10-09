@@ -1,5 +1,6 @@
 # io_manager.py
 from data_manager import get_user_profile, save_user_profile
+from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS
 
 DIVIDER = "=" * 70
 SECTION = "-" * 70
@@ -8,10 +9,10 @@ COLOR_YELLOW = "\033[33m"
 COLOR_GREEN = "\033[32m"
 COLOR_RESET= "\033[0m"
 
-RESTRICTIONS_PROMPT = (
-    # --- Prompt for User ---
-    "Enter your allergies/restrictions, separated by commas\n"
-    "(e.g. peanuts, seafood, g6pd, tree nuts): ")
+CUSTOM_PROMPT = (
+    # --- Prompt for anything not in the catalog ---
+    "Type your own allergies/restrictions, separated by commas\n"
+    "(e.g. g6pd, blue berries): ")
 
 def print_user_restrictions(restrictions):
     print(f"  • Allergies & Dietary Needs")
@@ -136,12 +137,14 @@ def parse_restrictions(raw_text):
     items = [r.strip().lower() for r in raw_text.split(",") if r.strip()]
     return items if items else ["none"]
 
-# Input restrictions display
-def prompt_for_restrictions():
-    # --- Prompts the user for Restrictions and Returns ---
-    """Asks the user for their restrictions and returns them as a clean list."""
-    raw_restrictions = input(RESTRICTIONS_PROMPT)
-    return parse_restrictions(raw_restrictions)
+def parse_number_list(raw_text, max_value):
+    parts = raw_text.replace(",", " ").split()
+    if not parts or not all(p.isdigit() for p in parts):
+        return None
+    numbers = [int(p) for p in parts]
+    if any(n < 1 or n > max_value for n in numbers):
+        return None
+    return numbers
 
 # Input handling for user authentication
 def handle_user_authentication():
