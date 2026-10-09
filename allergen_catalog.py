@@ -25,6 +25,16 @@ def group_restrictions(restrictions):
 
     groups = {"allergies": [], "restrictions": [], "other": []}
 
-    ###
+    for item in restrictions:
+        key = item.strip().lower()
+        if not key or key == "none":
+            continue
+        if key in KNOWN_ALLERGENS:
+            groups["allergies"].append(key)
+        elif key in KNOWN_DIETARY:
+            groups["restrictions"].append(key)
+        else:
+            groups["other"].append(key)
+ 
 
     return groups
