@@ -130,8 +130,8 @@ ai_prompt = """
 
     RISK SCORING (keep risk_score and risk_level consistent)
     - Low:    0-29  (no realistic conflict with the user's restrictions)
-    - Medium: 30-69 (possible hidden ingredient or cross-contact; vendor confirmation needed)
-    - High:   70-100 (a restriction is likely violated, or the severity of the restriction makes any doubt unacceptable)
+    - Medium: 30-59 (possible hidden ingredient or cross-contact; vendor confirmation needed)
+    - High:   60-100 (a restriction is likely violated, or the severity of the restriction makes any doubt unacceptable)
     - Severe allergies (e.g. peanuts, shellfish, G6PD triggers) with unresolved doubt should score higher than mild preferences.
     - is_safe is true ONLY if risk_level is "Low".
 
