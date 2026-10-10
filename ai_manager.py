@@ -141,6 +141,8 @@ ai_prompt = """
 
     OUTPUT RULES (the JSON structure is enforced separately; these rules cover the content)
     Say each fact ONCE, in the one field that owns it. Never repeat it in another field.
+    - NEVER state who owns or runs a stall, the owners' religion, or that a stall holds any certification (halal, etc.), unless it is a major chain whose certification is widely documented. You cannot see certificates.
+    - For Halal or other religious requirements at a stall you cannot verify, dietary_status MUST be "UNCERTAIN", never "COMPLIANT".
     - reasoning: 1-2 sentences, max 40 words. The verdict only: name the restriction and the single biggest cause. NO ingredient lists, NO cross-contact lists.
     - stall_specific_insights: max 2 sentences on how THIS stall (or this type of stall) operates: kitchen setup, shared tools, typical recipe. Do NOT restate the reasoning or list ingredients.
     - allergy_conflicts: allergy/medical names only (e.g. "Peanuts"), no sentences. Use an empty list if none. NEVER put dietary/religious requirements here.
@@ -184,7 +186,9 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
                     system_instruction=ai_prompt,
                     response_mime_type="application/json",
                     response_schema=ai_output_schema,  #requires api to follow the output schema structure 
-                    temperature=0
+                    temperature=0,
+                    top_k=1,
+                    seed=42,
                 ),
             )
             data = json.loads(response.text)
