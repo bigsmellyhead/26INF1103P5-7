@@ -1,25 +1,25 @@
 # logic_manager.py
-import json
 
-def validate_and_process_logic(raw_ai_response):
+def validate_and_process_logic(data):
     """
-    Validates AI schema, checks data types, and applies deterministic safety overrides.
+    Applies business rules to the AI result and decides the final outcome.
+    Schema validation moved to ai_manager.py
     """
-    try:
-        data = json.loads(raw_ai_response)
-    except json.JSONDecodeError:
-        raise ValueError("Error: AI response is not valid JSON format.")
 
-    required_keys = ["risk_score", "stall_specific_insights", "hidden_ingredients", "reasoning"]
-    for key in required_keys:
-        if key not in data:
-            raise ValueError(f"Schema Validation Failed: Missing required key '{key}'")
+    has_conflict = len(data["allergy_conflicts"]) > 0
+    non_compliant = "NON-COMPLIANT" in data["dietary_status"].values()
+    uncertain = "UNCERTAIN" in data["dietary_status"].values()
 
-    if not isinstance(data["risk_score"], (int, float)):
-        raise TypeError("Schema Validation Failed: 'risk_score' must be a number.")
+    # Conflicts or a NON-COMPLIANT status can never score below High
+    if (has_conflict or non_compliant) and data["risk_score"] < 60:
+        data["risk_score"] = 60
+
+    # An UNCERTAIN status can never be less than Moderate
+    elif uncertain and data["risk_score"] < 30:
+        data["risk_score"] = 30
 
     # Deterministic safety rule override: >= 60% or High risk means unsafe
-    #30% -59% = Moderate risk , 1%-29% = Lowrisk, < 1% = Negligible risk
+    # 30% -59% = Moderate risk , 1%-29% = Lowrisk, < 1% = Negligible risk
     if data["risk_score"] >= 60 :
         data["is_safe"] = False
         data["risk_level"] = "High"
@@ -33,6 +33,5 @@ def validate_and_process_logic(raw_ai_response):
     else:
         data["is_safe"] = True
         data["risk_level"] = "Negligible"
-
 
     return data
