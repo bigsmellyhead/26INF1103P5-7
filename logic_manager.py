@@ -4,7 +4,7 @@
 def collect_triggers(node, found, flags):
     if node["status"] == "Trigger":
         # io_manager only prints red when a conflict exists, so a Trigger needs a reason
-        if not node["conflict"]:
+        if not node["conflict"] and not node.get("children"):
             node["conflict"] = "Flagged by the AI (no detail given)"
             flags.append(f"'{node['name']}' was marked Trigger without a reason.")
         found.append(node)
