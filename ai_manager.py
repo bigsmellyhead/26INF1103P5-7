@@ -1,4 +1,5 @@
 # ai_manager.py
+import json
 import os
 from google import genai
 from google.genai import types
@@ -10,7 +11,7 @@ load_dotenv()
 
 #Stored here for easier model version change 
 model_name = "gemini-3.5-flash-lite"
-
+max_tries = 3
 
 leaf_node_schema = {
     "type": "OBJECT",
@@ -157,16 +158,23 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
     <dish>{dish}</dish>
     <restrictions>{restrictions_str}</restrictions>
     """
-
-    response = client.models.generate_content(
-        model=model_name,
-        contents =user_data,
-        config=types.GenerateContentConfig(
-            system_instruction=ai_prompt,
-            response_mime_type="application/json",
-            response_schema=ai_output_schema,  #requires api to follow the output schema structure 
-            temperature=0
-        ),
-    )
-    
-    return response.text
+    for attempt in range(1, max_tries + 1):
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents =user_data,
+                config=types.GenerateContentConfig(
+                    system_instruction=ai_prompt,
+                    response_mime_type="application/json",
+                    response_schema=ai_output_schema,  #requires api to follow the output schema structure 
+                    temperature=0
+                ),
+            )
+            data = json.loads(response.text)
+            # Gemini needs a list here, so turn it back into {"Halal": "COMPLIANT", ...}
+            data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
+            return data
+        except Exception as error:
+            print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
+            
+    return None
