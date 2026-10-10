@@ -137,13 +137,18 @@ ai_prompt = """
     - Use the full range: if a conflict is POSSIBLE but not confirmed, score 30-59 (Medium). 60+ should be reserved for confirmed or highly likely violations.
 
     OUTPUT RULES (the JSON structure is enforced separately; these rules cover the content)
+    Say each fact ONCE, in the one field that owns it. Never repeat it in another field.
+    - reasoning: 1-2 sentences, max 40 words. The verdict only: name the restriction and the single biggest cause. NO ingredient lists, NO cross-contact lists.
+    - stall_specific_insights: max 2 sentences on how THIS stall (or this type of stall) operates: kitchen setup, shared tools, typical recipe. Do NOT restate the reasoning or list ingredients.
+    - allergy_conflicts: allergy/medical names only (e.g. "Peanuts"), no sentences. Use an empty list if none. NEVER put dietary/religious requirements here.
     - dietary_status: only lifestyle/religious requirements (Halal, Vegan, Vegetarian...). NEVER put allergies or medical conditions here. Use an empty list if none.
-    - allergy_conflicts: only triggered allergy/medical violations, e.g. "Peanuts", "Shellfish (Hae Bi)". Use an empty list if none.
+    - hidden_ingredients: max 5, ingredient names only (no sentences), only things the user could not guess from the dish name.
+    - cross_contact_risks: max 3, each under 8 words (e.g. "Shared serving ladles"). Do not repeat them in stall_specific_insights.
     - ingredient_tree has at most 3 levels: the dish, its components, and their ingredients. Ingredients (the last level) have no children.
-    - A node with status "Trigger" MUST explain the violation in "conflict"; otherwise "conflict" is null.
-    - The dish node is "Trigger" if any node below it is "Trigger", otherwise "Safe".
-    - "stall_insight": ONE short sentence on how THIS stall's preparation affects that component (null if nothing stall-specific). On the dish node it summarises the stall's overall cooking style. If stall knowledge is "Inferred" or "Unknown", phrase it as typical or likely; NEVER state invented facts as certain.
-    - Do NOT repeat the main dish name inside child components (e.g. use "Oily Rice", NOT "Chicken Rice (Oily Rice)").
+      * A node is "Trigger" if it, or any node below it, violates the restrictions; otherwise "Safe".
+      * "conflict" on a Trigger ingredient (last level): max 10 words, the restricted item and why (e.g. "Oyster sauce: animal product"). A parent that is Trigger ONLY because of a child gets "conflict": null. Safe nodes get null.
+      * "stall_insight": null on the dish node. On other nodes it is null unless this stall's practice changes THAT component's risk. Use it on at most 2 nodes, max 12 words. If stall knowledge is "Inferred" or "Unknown", phrase it as typical or likely. NEVER state invented facts as certain.
+      * Do NOT repeat the main dish name inside child components (e.g. use "Oily Rice", NOT "Chicken Rice (Oily Rice)").
     """
 
 def query_ai_safety_auditor(stall, dish, restrictions_list):
