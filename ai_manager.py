@@ -28,12 +28,40 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
     - "risk_level": string ("Low", "Medium", or "High")
     - "risk_score": number (0 to 100 integer representing risk percentage)
     - "stall_specific_insights": string (analysis of stall/hawker culture/hidden ingredients)
-    - "hidden_ingredients": list of objects, each mapping one of the user's restrictions to a list of hidden ingredient strings that trigger it, e.g. [{{"peanuts": ["sambal", "fried peanuts"]}}, {{"seafood": ["belacan", "ikan bilis"]}}]
-    - "reasoning": string (short explanation of why it is safe or unsafe)
+    - "reasoning" : Short reason why it has the allergy
+    - "hidden_ingredients" : list of hidden ingredients
+    - "dietary_status": dictionary - Map each checked lifestyle/religious requirement to its compliance state (e.g., {{"Halal": "COMPLIANT", "Vegan": "COMPLIANT"}}). Strictly exclude allergies. If none, return an empty dictionary {{}}.
+    - "allergy_conflicts": list of strings (e.g., ["Peanuts", "Tree Nuts (Cashews)"]) - Only list triggered violations; leave empty if none.
+    - "ingredient_tree": object representing the dish hierarchy. 
+      * CRITICAL RULE: Every node MUST have a "name" and a "status" ("Safe" or "Trigger"). 
+      * Every node MUST include a "children" key containing a list (use an empty list [] if there are no sub-ingredients).
+      * Do NOT repeat the main dish name inside child components (e.g., use "Oily Rice" or "Fragrant Rice", NOT "Chicken Rice (Oily Rice)").
+      * If an item has a "Trigger" status, it MUST include a "conflict" field detailing the violation; otherwise, set "conflict" to null.
+      * 
+      Structure:
+      {{
+        "name": "string (Main Dish Name)",
+        "status": "string (Safe / Unsafe)",
+        "children": [
+          {{
+            "name": "string (Category or Ingredient Name)",
+            "status": "string (Safe / Trigger)",
+            "conflict": "string or []",
+            "children": [
+              {{
+                "name": "string",
+                "status": "string (Safe / Trigger)",
+                "conflict": "string or null",
+                "children": []
+              }}
+            ]
+          }}
+        ]
+      }}
     """
 
     response = client.models.generate_content(
-        model="gemini-3.6-flash",
+        model="gemini-3.5-flash-lite",
         contents=prompt,
         config=types.GenerateContentConfig(
             response_mime_type="application/json"
