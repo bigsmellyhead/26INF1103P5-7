@@ -1,4 +1,5 @@
 # ai_manager.py
+import json
 import os
 from google import genai
 from google.genai import types
@@ -168,5 +169,10 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
             temperature=0
         ),
     )
-    
-    return response.text
+
+    data = json.loads(response.text)
+
+    # Gemini needs a list here, so turn it back into {"Halal": "COMPLIANT", ...}
+    data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
+
+    return data
