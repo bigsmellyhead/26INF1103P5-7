@@ -20,6 +20,8 @@ def raise_score(data, minimum, reason):
         data["risk_score"] = minimum
         data["flags"].append(f"Score raised to {minimum}: {reason}")
 
+certification_requirements = ["halal", "kosher"]
+
 def validate_and_process_logic(data, restrictions):
     """
     Applies business rules to the AI result and decides the final outcome.
@@ -32,7 +34,13 @@ def validate_and_process_logic(data, restrictions):
     data["risk_score"] = max(0, min(100, data["risk_score"]))
 
     # parse_restrictions in io_manager gives ["none"] when the user has no restrictions
-    has_restrictions = restrictions != ["none"]
+    # has_restrictions = restrictions != ["none"]
+        # The AI cannot verify certificates, so COMPLIANT is never accepted for them
+    for requirement, status in list(data["dietary_status"].items()):
+        if status == "COMPLIANT" and any(word in requirement.lower() for word in certification_requirements):
+            data["dietary_status"][requirement] = "UNCERTAIN"
+            data["flags"].append(f"{requirement} changed to UNCERTAIN: the AI cannot verify a certification.")
+
     has_conflict = len(data["allergy_conflicts"]) > 0
     non_compliant = "NON-COMPLIANT" in data["dietary_status"].values()
     uncertain = "UNCERTAIN" in data["dietary_status"].values()
