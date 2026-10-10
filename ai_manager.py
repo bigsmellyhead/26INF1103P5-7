@@ -4,11 +4,101 @@ from google import genai
 from google.genai import types
 from dotenv import load_dotenv 
 
+
 #This is so that we do not have to keep putting our own API key into the terminal
 load_dotenv()                  
 
 #Stored here for easier model version change 
 model_name = "gemini-3.5-flash-lite"
+
+
+leaf_node_schema = {
+    "type": "OBJECT",
+    "properties": {
+        "name": {"type": "STRING"},
+        "status": {"type": "STRING", "enum": ["Safe", "Trigger"]},
+        "conflict": {"type": "STRING", "nullable": True},
+        "stall_insight": {"type": "STRING", "nullable": True},
+    },
+    "required": ["name", "status", "conflict", "stall_insight"],
+}
+
+
+component_node_schema = {
+    "type": "OBJECT",
+    "properties": {
+        "name": {"type": "STRING"},
+        "status": {"type": "STRING", "enum": ["Safe", "Trigger"]},
+        "conflict": {"type": "STRING", "nullable": True},
+        "stall_insight": {"type": "STRING", "nullable": True},
+        "children": {
+            "type": "ARRAY",
+            "items": leaf_node_schema,
+        },
+    },
+    "required": ["name", "status", "conflict", "stall_insight", "children"],
+}
+
+
+ingredient_tree_schema = {
+    "type": "OBJECT",
+    "properties": {
+        "name": {"type": "STRING"},
+        "status": {"type": "STRING", "enum": ["Safe", "Trigger"]},
+        "conflict": {"type": "STRING", "nullable": True},
+        "stall_insight": {"type": "STRING", "nullable": True},
+        "children": {
+            "type": "ARRAY",
+            "items": component_node_schema,
+        },
+    },
+    "required": ["name", "status", "conflict", "stall_insight", "children"],
+}
+
+#Forces the reply to be JSON with every key in "required", using the listed types and enum values
+ai_output_schema = {
+    "type": "OBJECT",
+    "properties": {
+        "is_safe": {"type": "BOOLEAN"},
+        "risk_level": {"type": "STRING", "enum": ["Low", "Medium", "High"]},
+        "risk_score": {"type": "INTEGER"},
+        "stall_specific_insights": {"type": "STRING"},
+        "reasoning": {"type": "STRING"},
+        "hidden_ingredients": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "cross_contact_risks": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "dietary_status": {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "requirement": {
+                        "type": "STRING",
+                        "description": "Lifestyle or religious requirement name (e.g. Halal, Vegan, Vegetarian, Kosher)",
+                    },
+                    "status": {
+                        "type": "STRING",
+                        "enum": ["COMPLIANT", "NON-COMPLIANT", "UNCERTAIN"],
+                    },
+                },
+                "required": ["requirement", "status"],
+            },
+        },
+        "allergy_conflicts": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "ingredient_tree": ingredient_tree_schema,
+    },
+    "required": [
+        "is_safe",
+        "risk_level",
+        "risk_score",
+        "stall_specific_insights",
+        "reasoning",
+        "hidden_ingredients",
+        "cross_contact_risks",
+        "dietary_status",
+        "allergy_conflicts",
+        "ingredient_tree",
+    ],
+}
 
 ai_prompt = f"""
     You are an expert food safety and dietary restriction auditor for Singapore hawker centres.
@@ -43,52 +133,7 @@ ai_prompt = f"""
     - High:   70-100 (a restriction is likely violated, or the severity of the restriction makes any doubt unacceptable)
     - Severe allergies (e.g. peanuts, shellfish, G6PD triggers) with unresolved doubt should score higher than mild preferences.
     - is_safe is true ONLY if risk_level is "Low".
-    
-     OUTPUT FORMAT
-    You MUST respond with a valid JSON object only (no markdown text blocks like ```json, just raw JSON string) containing exactly these keys:
-    - "is_safe": boolean (true if completely safe, false otherwise),
-    - "risk_level": "Low" | "Medium" | "High",
-    - "risk_score": integer 0-100,
-    - "stall_specific_insights": string (max 2-4 sentences: analysis of stall/hawker culture/hidden ingredients),
-    - "reasoning": string (short, plain-language reason for the verdict, naming the restriction(s) involved),
-    - "hidden_ingredients": [string, ...] (ingredients not obvious from the dish name, relevant to the restrictions),
-    - "cross_contact_risks": [string, ...] (stall-level cross-contact or shared-equipment risks; empty list if none),
-    - "dietary_status": {{ "<lifestyle/religious requirement>": "COMPLIANT" | "NON-COMPLIANT" | "UNCERTAIN" }} (e.g. Halal, Vegan, Vegetarian. Strictly EXCLUDE allergies/medical conditions. Empty object {{}} if none.),
-    - "allergy_conflicts": [string, ...] (only triggered allergy/medical violations, e.g. "Peanuts", "Shellfish (Hae Bi)"; empty list if none),
-    - "ingredient_tree": object representing the dish hierarchy.
-      * CRITICAL RULE: Every node (including the main dish) MUST have a "name", a "status" ("Safe" or "Trigger"), a "conflict", a "stall_insight" and a "children" key.
-      * "children" is a list (use an empty list [] if there are no sub-ingredients).
-      * If a node has a "Trigger" status, "conflict" MUST detail the violation; otherwise, set "conflict" to null.
-      * "stall_insight" is ONE short sentence on how THIS stall's preparation affects that specific component (e.g. shared wok, reused fry oil, house-made sambal with belacan). Use null if there is nothing stall-specific to say about that component.
-      * On the main dish node, "stall_insight" is a one-sentence summary of the stall's overall cooking style.
-      * If stall knowledge is "Inferred" or "Unknown", phrase every stall_insight as typical or likely (e.g. "Stalls like this typically..."). NEVER state invented facts as certain.
-      * The main dish node is "Trigger" if any ingredient below it is "Trigger", otherwise "Safe".
-      * Do NOT repeat the main dish name inside child components (e.g., use "Oily Rice" or "Fragrant Rice", NOT "Chicken Rice (Oily Rice)").
 
-      Structure:
-      {{
-        "name": "string (Main Dish Name)",
-        "status": "string (Safe / Trigger)",
-        "conflict": "string or null",
-        "stall_insight": "string or null",
-        "children": [
-          {{
-            "name": "string (Category or Ingredient Name)",
-            "status": "string (Safe / Trigger)",
-            "conflict": "string or null",
-            "stall_insight": "string or null",
-            "children": [
-              {{
-                "name": "string",
-                "status": "string (Safe / Trigger)",
-                "conflict": "string or null",
-                "stall_insight": "string or null",
-                "children": []
-              }}
-            ]
-          }}
-        ]
-      }}
 
     """
 
@@ -119,6 +164,7 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
         config=types.GenerateContentConfig(
             system_instruction=ai_prompt,
             response_mime_type="application/json",
+            response_schema=ai_output_schema,  #requires api to follow the output schema structure 
             temperature=0
         ),
     )
