@@ -287,9 +287,8 @@ def handle_user_authentication():
             print("Please enter only 'y' or 'n'.")
 
         if update_choice == 'y':
-            # --- User wants to overwrite their restrictions ---
-            print()
-            restrictions = prompt_for_restrictions()
+            # --- User wants to change their restrictions (menu opens pre-ticked) ---
+            restrictions = prompt_for_restrictions(current=user_profile['restrictions'])
 
             # Overwrite the profile in the JSON database
             save_user_profile(username, restrictions)
