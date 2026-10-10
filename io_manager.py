@@ -222,6 +222,38 @@ def run_item_menu(title, items, selected, allow_custom=False):
                 else:
                     selected.add(item)
 
+def prompt_for_restrictions(current=None):
+    # --- Prompts the user for Restrictions via the category menu and Returns them ---
+    """Walks the user through the allergen menu. Returns a clean list, or ['none']."""
+    # Each entry: (group header, menu title, list of items)
+    menu_entries = [("Allergies", category, items) for category, items in ALLERGEN_CATALOG.items()]
+    menu_entries.append(("Restrictions", "Dietary / religious", DIETARY_RESTRICTIONS))
+    other_number = len(menu_entries) + 1
+
+    # Start from whatever the user already has saved (empty for new users)
+    selected = {r for r in (current or []) if r != "none"}
+
+    # Anything saved earlier that isn't in the catalog is kept under "Other"
+    custom_items = sorted(r for r in selected if r not in KNOWN_ITEMS)
+
+    while True:
+        show_category_menu(menu_entries, selected, custom_items)
+        choice = input("Your choice: ").strip().lower()
+
+        if choice == "d":
+            break
+        elif choice == "c":
+            selected.clear()
+        elif choice.isdigit() and 1 <= int(choice) <= len(menu_entries):
+            group, title, items = menu_entries[int(choice) - 1]
+            run_item_menu(f"{group} > {title}", items, selected)
+        elif choice.isdigit() and int(choice) == other_number:
+            run_item_menu("Other", custom_items, selected, allow_custom=True)
+        else:
+            print("Please enter a number, 'd' or 'c'.")
+
+    return sorted(selected) if selected else ["none"]
+
 # Input handling for user authentication
 def handle_user_authentication():
     """Handles existing user check, profile editing, or new user registration."""
