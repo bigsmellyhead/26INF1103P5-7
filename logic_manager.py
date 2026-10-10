@@ -20,7 +20,7 @@ def raise_score(data, minimum, reason):
         data["risk_score"] = minimum
         data["flags"].append(f"Score raised to {minimum}: {reason}")
 
-def validate_and_process_logic(data):
+def validate_and_process_logic(data, restrictions):
     """
     Applies business rules to the AI result and decides the final outcome.
     Schema validation moved to ai_manager.py
@@ -31,6 +31,8 @@ def validate_and_process_logic(data):
     # Keep the score inside 0-100 in case the API goes out of range
     data["risk_score"] = max(0, min(100, data["risk_score"]))
 
+    # parse_restrictions in io_manager gives ["none"] when the user has no restrictions
+    has_restrictions = restrictions != ["none"]
     has_conflict = len(data["allergy_conflicts"]) > 0
     non_compliant = "NON-COMPLIANT" in data["dietary_status"].values()
     uncertain = "UNCERTAIN" in data["dietary_status"].values()
