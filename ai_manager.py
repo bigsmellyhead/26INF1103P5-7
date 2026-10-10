@@ -13,13 +13,16 @@ load_dotenv()
 model_name = "gemini-3.5-flash-lite"
 max_tries = 3
 
+conflict_description = "Max 10 words naming the restricted item. Null on Safe nodes and on parents that are Trigger only because of a child."
+insight_description = "Max 12 words, only if this stall's practice changes this component's risk. Null otherwise. Always null on the dish node."
+
 leaf_node_schema = {
     "type": "OBJECT",
     "properties": {
         "name": {"type": "STRING"},
         "status": {"type": "STRING", "enum": ["Safe", "Trigger"]},
-        "conflict": {"type": "STRING", "nullable": True},
-        "stall_insight": {"type": "STRING", "nullable": True},
+        "conflict": {"type": "STRING", "nullable": True, "description": conflict_description},
+        "stall_insight": {"type": "STRING", "nullable": True, "description": insight_description},
     },
     "required": ["name", "status", "conflict", "stall_insight"],
 }
@@ -30,8 +33,8 @@ component_node_schema = {
     "properties": {
         "name": {"type": "STRING"},
         "status": {"type": "STRING", "enum": ["Safe", "Trigger"]},
-        "conflict": {"type": "STRING", "nullable": True},
-        "stall_insight": {"type": "STRING", "nullable": True},
+        "conflict": {"type": "STRING", "nullable": True, "description": conflict_description},
+        "stall_insight": {"type": "STRING", "nullable": True, "description": insight_description},
         "children": {
             "type": "ARRAY",
             "items": leaf_node_schema,
@@ -46,8 +49,8 @@ ingredient_tree_schema = {
     "properties": {
         "name": {"type": "STRING"},
         "status": {"type": "STRING", "enum": ["Safe", "Trigger"]},
-        "conflict": {"type": "STRING", "nullable": True},
-        "stall_insight": {"type": "STRING", "nullable": True},
+        "conflict": {"type": "STRING", "nullable": True, "description": conflict_description},
+        "stall_insight": {"type": "STRING", "nullable": True, "description": insight_description},
         "children": {
             "type": "ARRAY",
             "items": component_node_schema,
