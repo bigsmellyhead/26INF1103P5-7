@@ -1,5 +1,19 @@
 # logic_manager.py
 
+# Walks the ingredient tree and collects every node the AI marked as Trigger
+def collect_triggers(node, found, flags):
+    if node["status"] == "Trigger":
+        # io_manager only prints red when a conflict exists, so a Trigger needs a reason
+        if not node["conflict"]:
+            node["conflict"] = "Flagged by the AI (no detail given)"
+            flags.append(f"'{node['name']}' was marked Trigger without a reason.")
+        found.append(node)
+
+    # leaf nodes have no "children" key, so .get is used
+    for child in node.get("children", []):
+        collect_triggers(child, found, flags)
+    return found
+
 # Raises the score to a minimum (never lowers it) and records why
 def raise_score(data, minimum, reason):
     if data["risk_score"] < minimum:
@@ -21,6 +35,8 @@ def validate_and_process_logic(data):
     non_compliant = "NON-COMPLIANT" in data["dietary_status"].values()
     uncertain = "UNCERTAIN" in data["dietary_status"].values()
 
+    triggers = collect_triggers(data["ingredient_tree"], [], data["flags"])
+
     # Conflicts or a NON-COMPLIANT status can never score below High
     if has_conflict or non_compliant:
         raise_score(data, 60, "the AI reported a conflict or non-compliant status.")
@@ -28,6 +44,14 @@ def validate_and_process_logic(data):
     # An UNCERTAIN status can never be less than Moderate
     if uncertain:
         raise_score(data, 30, "a dietary requirement is UNCERTAIN.")
+
+    # A Trigger ingredient in the tree can never score below Medium
+    if triggers:
+        raise_score(data, 30, "an ingredient is marked Trigger in the breakdown.")
+
+    # Conflicts listed but nothing in the tree explains them: flag it, do not change the score
+    if has_conflict and not triggers:
+        data["flags"].append("Allergy conflicts were listed but no ingredient is marked Trigger. Verify with the vendor.")
 
     # Deterministic safety rule override: >= 60% or High risk means unsafe
     # 30% -59% = Moderate risk , 1%-29% = Lowrisk, < 1% = Negligible risk
