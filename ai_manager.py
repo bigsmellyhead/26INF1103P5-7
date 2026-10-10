@@ -62,7 +62,7 @@ ai_output_schema = {
     "properties": {
         "is_safe": {"type": "BOOLEAN"},
         "risk_level": {"type": "STRING", "enum": ["Low", "Medium", "High"]},
-        "risk_score": {"type": "INTEGER"},
+        "risk_score": {"type": "INTEGER", "minimum": 0, "maximum": 100},
         "stall_specific_insights": {"type": "STRING"},
         "reasoning": {"type": "STRING"},
         "hidden_ingredients": {"type": "ARRAY", "items": {"type": "STRING"}},
