@@ -134,6 +134,7 @@ ai_prompt = """
     - High:   60-100 (a restriction is likely violated, or the severity of the restriction makes any doubt unacceptable)
     - Severe allergies (e.g. peanuts, shellfish, G6PD triggers) with unresolved doubt should score higher than mild preferences.
     - is_safe is true ONLY if risk_level is "Low".
+    - Use the full range: if a conflict is POSSIBLE but not confirmed, score 30-59 (Medium). 60+ should be reserved for confirmed or highly likely violations.
 
     OUTPUT RULES (the JSON structure is enforced separately; these rules cover the content)
     - dietary_status: only lifestyle/religious requirements (Halal, Vegan, Vegetarian...). NEVER put allergies or medical conditions here. Use an empty list if none.
