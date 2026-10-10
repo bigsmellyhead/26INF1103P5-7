@@ -13,7 +13,7 @@ load_dotenv()
 model_name = "gemini-3.5-flash-lite"
 max_tries = 3
 
-conflict_description = "Max 10 words naming the restricted item. Null on Safe nodes and on parents that are Trigger only because of a child."
+conflict_description = "Max 6 words, the reason only. Do not repeat the ingredient name. Null on Safe nodes and on parents that are Trigger only because of a child."
 insight_description = "Max 12 words, only if this stall's practice changes this component's risk. Null otherwise. Always null on the dish node."
 
 leaf_node_schema = {
@@ -145,11 +145,12 @@ ai_prompt = """
     - stall_specific_insights: max 2 sentences on how THIS stall (or this type of stall) operates: kitchen setup, shared tools, typical recipe. Do NOT restate the reasoning or list ingredients.
     - allergy_conflicts: allergy/medical names only (e.g. "Peanuts"), no sentences. Use an empty list if none. NEVER put dietary/religious requirements here.
     - dietary_status: only lifestyle/religious requirements (Halal, Vegan, Vegetarian...). NEVER put allergies or medical conditions here. Use an empty list if none.
-    - hidden_ingredients: max 5, ingredient names only (no sentences), only things the user could not guess from the dish name.
+    - hidden_ingredients: max 5, ingredient names only (no sentences), only things the user could not guess from the dish name. Only list ingredients that are NOT already a note in ingredient_tree.
     - cross_contact_risks: max 3, each under 8 words (e.g. "Shared serving ladles"). Do not repeat them in stall_specific_insights.
     - ingredient_tree has at most 3 levels: the dish, its components, and their ingredients. Ingredients (the last level) have no children.
+      * Every ingredient in hidden_ingredients that violates the restrictions must also appear as a Trigger node in ingredient_tree
       * A node is "Trigger" if it, or any node below it, violates the restrictions; otherwise "Safe".
-      * "conflict" on a Trigger ingredient (last level): max 10 words, the restricted item and why (e.g. "Oyster sauce: animal product"). A parent that is Trigger ONLY because of a child gets "conflict": null. Safe nodes get null.
+      * "conflict" on a Trigger ingredient (last level): max 6 words, the reason ONLY. Do NOT repeat the ingredient name or the word Trigger (e.g. "Animal product", "Contains shellfish"). A parent that is Trigger ONLY because of a child gets "conflict": null. Safe nodes get null.
       * "stall_insight": null on the dish node. On other nodes it is null unless this stall's practice changes THAT component's risk. Use it on at most 2 nodes, max 12 words. If stall knowledge is "Inferred" or "Unknown", phrase it as typical or likely. NEVER state invented facts as certain.
       * Do NOT repeat the main dish name inside child components (e.g. use "Oily Rice", NOT "Chicken Rice (Oily Rice)").
     """
