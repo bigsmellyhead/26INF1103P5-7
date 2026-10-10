@@ -138,6 +138,7 @@ def parse_restrictions(raw_text):
     return items if items else ["none"]
 
 def parse_number_list(raw_text, max_value):
+    # --- Turns "1, 3 4" into [1, 3, 4]. Returns None if anything is invalid ---
     parts = raw_text.replace(",", " ").split()
     if not parts or not all(p.isdigit() for p in parts):
         return None
@@ -174,7 +175,8 @@ def show_category_menu(menu_entries, selected, custom_items):
     print(f"\nCurrently selected: {', '.join(sorted(selected)) if selected else 'none'}")
 
 def run_item_menu(title, items, selected, allow_custom=False):
-
+    # --- Level 2: tick / untick specific allergens inside one category ---
+    # `selected` (a set) and `items` (a list) are edited in place.
     while True:
         print(f"\n{SECTION}")
         print(f" {title}")
@@ -214,7 +216,7 @@ def run_item_menu(title, items, selected, allow_custom=False):
             if numbers is None:
                 print("Invalid choice. Please try again.")
                 continue
-            
+            # set() so "1,1" doesn't tick and untick the same item
             for number in set(numbers):
                 item = items[number - 1].lower()
                 if item in selected:
