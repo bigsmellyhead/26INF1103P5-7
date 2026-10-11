@@ -158,7 +158,7 @@ ai_prompt = """
       * A node is "Trigger" if it, or any node below it, violates the restrictions; otherwise "Safe".
       * "conflict": only a Trigger node with NO children gets one: max 6 words, the reason ONLY (e.g. "Animal product", "Contains shellfish"). Never repeat the ingredient name or the word Trigger. Every node that has children, and every Safe node, gets "conflict": null.
       * "stall_insight": null on the dish node. On other nodes it is null unless this stall's practice changes THAT component's risk. Use it on at most 2 nodes, max 12 words. If stall_knowledge is "Inferred" or "Unknown", phrase it as typical or likely.
-      * Do NOT repeat the main dish name inside child components (e.g. use "Oily Rice", NOT "Chicken Rice (Oily Rice)").
+      * Do NOT repeat a parent's name in its children. This applies to the main dish (use "Oily Rice", NOT "Chicken Rice (Oily Rice)") and to components (a component "Rice" must not contain a child "Rice"; if a component is a single ingredient, give it an empty children list).
     """
 
 
