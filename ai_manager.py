@@ -189,7 +189,7 @@ def query_ai_safety_auditor(stall, dish, restrictions):
 
     client = genai.Client(api_key=api_key)
 
-    restrictions_str = ", ".join(restrictions)
+    restrictions_str = restrictions_to_text(restrictions)
 
     # Strip angle brackets so user input can't close our tags early
     stall = stall.replace("<", "").replace(">", "")
