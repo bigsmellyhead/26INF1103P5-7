@@ -33,9 +33,7 @@ def validate_and_process_logic(data, restrictions):
     # Keep the score inside 0-100 in case the API goes out of range
     data["risk_score"] = max(0, min(100, data["risk_score"]))
 
-    # parse_restrictions in io_manager gives ["none"] when the user has no restrictions
-    # has_restrictions = restrictions != ["none"]
-        # The AI cannot verify certificates, so COMPLIANT is never accepted for them
+    # The AI cannot verify certificates, so COMPLIANT is never accepted for them
     for requirement, status in list(data["dietary_status"].items()):
         if status == "COMPLIANT" and any(word in requirement.lower() for word in certification_requirements):
             data["dietary_status"][requirement] = "UNCERTAIN"
@@ -62,6 +60,11 @@ def validate_and_process_logic(data, restrictions):
     # Conflicts listed but nothing in the tree explains them: flag it, do not change the score
     if has_conflict and not triggers:
         data["flags"].append("Allergy conflicts were listed but no ingredient is marked Trigger. Verify with the vendor.")
+
+    # Stall not really known AND shared-equipment risks: do not leave it in the Low band
+    stall_unverified = data.get("stall_knowledge", "Unknown") in ["Inferred", "Unknown"]
+    if stall_unverified and len(data["cross_contact_risks"]) > 0:
+        raise_score(data, 30, "unverified stall with cross-contact risks.")
 
     # Deterministic safety rule override: >= 60% or High risk means unsafe
     # 30% -59% = Moderate risk , 1%-29% = Lowrisk, < 1% = Negligible risk
