@@ -43,7 +43,15 @@ def validate_and_process_logic(data, restrictions):
     non_compliant = "NON-COMPLIANT" in data["dietary_status"].values()
     uncertain = "UNCERTAIN" in data["dietary_status"].values()
 
+    has_restrictions = restrictions != ["none"]
+    stall_unverified = data["stall_knowledge"] in ["Inferred", "Unknown"]
+    ai_noticed_risks = data["risk_score"] >= 10
+
     triggers = collect_triggers(data["ingredient_tree"], [], data["flags"])
+
+    # Stall not really known AND user has restrictions AND shared-equipment risks: cannot stay in the Low band
+    if has_restrictions and stall_unverified and len(data["cross_contact_risks"]) > 0 and ai_noticed_risks:
+        raise_score(data, 30, "unverified stall with cross-contact risks.")
 
     # Conflicts or a NON-COMPLIANT status can never score below High
     if has_conflict or non_compliant:
@@ -67,7 +75,7 @@ def validate_and_process_logic(data, restrictions):
         raise_score(data, 30, "unverified stall with cross-contact risks.")
 
     # Deterministic safety rule override: >= 60% or High risk means unsafe
-    # 30% -59% = Moderate risk , 1%-29% = Lowrisk, < 1% = Negligible risk
+    # 30% -59% = Medium risk , 1%-29% = Lowrisk, < 1% = Negligible risk
     if data["risk_score"] >= 60 :
         data["is_safe"] = False
         data["risk_level"] = "High"
@@ -75,11 +83,8 @@ def validate_and_process_logic(data, restrictions):
         data["is_safe"] = False
         data["risk_level"] = "Medium"
     # incase api gives risk score like 0.5 etc
-    elif data["risk_score"] >0:
-        data["is_safe"] = False
-        data["risk_level"] = "Low"
     else:
         data["is_safe"] = True
-        data["risk_level"] = "Negligible"
+        data["risk_level"] = "Low"
 
     return data
