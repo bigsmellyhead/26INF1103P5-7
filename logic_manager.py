@@ -1,17 +1,41 @@
 # logic_manager.py
 
-# Walks the ingredient tree and collects every node the AI marked as Trigger
-def collect_triggers(node, found, flags):
-    if node["status"] == "Trigger":
-        # io_manager only prints red when a conflict exists, so a Trigger needs a reason
-        if not node["conflict"] and not node.get("children"):
-            node["conflict"] = "Flagged by the AI (no detail given)"
-            flags.append(f"'{node['name']}' was marked Trigger without a reason.")
-        found.append(node)
+# Removes a child that just repeats its parent's name (e.g. Rice > Rice), keeping its verdict on the parent
+def remove_repeated_children(node):
+    if "children" not in node:
+        return
+    kept = []
+    for child in node["children"]:
+        if child["name"].strip().lower() == node["name"].strip().lower():
+            if child["status"] == "Trigger":
+                node["status"] = "Trigger"
+                node["conflict"] = node["conflict"] or child["conflict"]
+            # the repeated child may have its own children, so keep those
+            kept.extend(child.get("children", []))
+        else:
+            kept.append(child)
+    node["children"] = kept
+    for child in node["children"]:
+        remove_repeated_children(child)
 
+# Walks the ingredient tree (children first), keeps parents consistent and collects every Trigger node
+def collect_triggers(node, found, flags):
     # leaf nodes have no "children" key, so .get is used
     for child in node.get("children", []):
         collect_triggers(child, found, flags)
+
+    child_triggered = any(child["status"] == "Trigger" for child in node.get("children", []))
+
+    # A parent is a Trigger if anything below it is
+    if child_triggered and node["status"] == "Safe":
+        node["status"] = "Trigger"
+
+    if node["status"] == "Trigger":
+        # A Trigger needs a reason somewhere: its own, or one of its children's
+        if not node["conflict"] and not child_triggered:
+            node["conflict"] = "Flagged by the AI (no detail given)"
+            flags.append(f"'{node['name']}' was marked Trigger without a reason.")
+        found.append(node)
     return found
 
 # Raises the score to a minimum (never lowers it) and records why
@@ -54,7 +78,7 @@ def validate_and_process_logic(data, restrictions):
             if not already_listed:
                 data["dietary_status"][item.title()] = "UNCERTAIN"
                 data["flags"].append(f"{item.title()} was not assessed by the AI, so it is marked UNCERTAIN.")
-                
+
     has_conflict = len(data["allergy_conflicts"]) > 0
     non_compliant = "NON-COMPLIANT" in data["dietary_status"].values()
     uncertain = "UNCERTAIN" in data["dietary_status"].values()
@@ -63,7 +87,13 @@ def validate_and_process_logic(data, restrictions):
     stall_unverified = data["stall_knowledge"] in ["Inferred", "Unknown"]
     ai_noticed_risks = data["risk_score"] >= 10
 
+    remove_repeated_children(data["ingredient_tree"])
     triggers = collect_triggers(data["ingredient_tree"], [], data["flags"])
+
+    # A flagged ingredient that the stall's practice affects is worth telling the user about
+    for node in triggers:
+        if node.get("stall_insight"):
+            data["flags"].append(f"Stall practice affects '{node['name']}': {node['stall_insight']}")
 
     # Stall not really known AND user has restrictions AND shared-equipment risks: cannot stay in the Low band
     if has_restrictions and stall_unverified and len(data["cross_contact_risks"]) > 0 and ai_noticed_risks:
