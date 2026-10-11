@@ -23,7 +23,7 @@ max_tries = 3
 conflict_description = "Max 6 words, the reason only. Do not repeat the ingredient name. Null on Safe nodes and on parents that are Trigger only because of a child."
 insight_description = "Max 12 words, only if this stall's practice changes this component's risk. Null otherwise. Always null on the dish node."
 
-# This schema should enforce the last level of the output tree which shows the ingridients used in each component of the dish
+# This schema node should enforce the last level of the output tree which shows the ingridients used in each component of the dish
 #This is the end of the tree thus it has no 'children' key
 leaf_node_schema = {
     "type": "OBJECT",
@@ -38,7 +38,7 @@ leaf_node_schema = {
     "required": ["name", "status", "conflict", "stall_insight"],
 }
 
-# This schema should enforce the second level of the output tree which shows the components of a dish
+# This schema node should enforce the second level of the output tree which shows the components of a dish
 # It holds a 'children' key which values is in a array. Its schema is defined in the leaf_node_schema dictionary
 component_node_schema = {
     "type": "OBJECT",
@@ -58,7 +58,7 @@ component_node_schema = {
 
 
 
-# This schema should enforce the first level of the output tree which shows the dish.
+# This schema node should enforce the first level of the output tree which shows the dish.
 # It holds a 'children' key which values is in a array. Its schema is defined in the component_node_schema dictionary
 ingredient_tree_schema = {
     "type": "OBJECT",
@@ -87,7 +87,7 @@ ai_output_schema = {
         "stall_specific_insights": {"type": "STRING"},
         "reasoning": {"type": "STRING"},
         "hidden_ingredients": {"type": "ARRAY", "items": {"type": "STRING"}},
-        "cross_contact_risks": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "cross_contact_risks": {"type": "ARRAY", "items": {"type": "STRING"},"maxItems": 3},
         "dietary_status": {
             "type": "ARRAY",
             "items": {
@@ -189,18 +189,28 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
 
     client = genai.Client(api_key=api_key)
 
-    restrictions_str = ", ".join(restrictions_list)
+ #unpacks each list from the restriction_lists dictionary into their individual fields and join each item into a string with ','. 
+ #uses "none" if list is empty
+    allergies = ", ".join(restrictions_list.get("allergies", [])) or "none"
+    dietary = ", ".join(restrictions_list.get("restrictions", [])) or "none"
+    other = ", ".join(restrictions_list.get("other", [])) or "none"
 
     # Strip angle brackets so user input can't close our tags early
     stall = stall.replace("<", "").replace(">", "")
     dish = dish.replace("<", "").replace(">", "")
-    restrictions_str = restrictions_str.replace("<", "").replace(">", "")
+    allergies = allergies.replace("<", "").replace(">", "")
+    dietary = dietary.replace("<", "").replace(">", "")
+    other = other.replace("<", "").replace(">", "")
 
     # Only the user's input goes here, wrapped in tags so the model treats it as data
     user_data = f"""
     <stall>{stall}</stall>
     <dish>{dish}</dish>
-    <restrictions>{restrictions_str}</restrictions>
+    <restrictions>
+        <allergies>{allergies}</allergies>
+        <dietary>{dietary}</dietary>
+        <other>{other}</other>
+    </restrictions>
     """
 
     #for loop  allows the api querry to attempt the querry to connect 3 times, if an attempt fails, the loop tries again
