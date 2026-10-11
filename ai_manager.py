@@ -11,6 +11,8 @@ load_dotenv()
 
 #Stored here for easier model version change 
 model_name = "gemini-3.5-flash-lite"
+
+#defines the max number of attempts to call the api until it stops attempting
 max_tries = 3
 
 conflict_description = "Max 6 words, the reason only. Do not repeat the ingredient name. Null on Safe nodes and on parents that are Trigger only because of a child."
@@ -27,6 +29,7 @@ leaf_node_schema = {
         "conflict": {"type": "STRING", "nullable": True, "description": conflict_description},
         "stall_insight": {"type": "STRING", "nullable": True, "description": insight_description},
     },
+    #These keys must be included in the API reply
     "required": ["name", "status", "conflict", "stall_insight"],
 }
 
@@ -41,9 +44,10 @@ component_node_schema = {
         "stall_insight": {"type": "STRING", "nullable": True, "description": insight_description},
         "children": {
             "type": "ARRAY", # children is a array
-            "items": leaf_node_schema, #Each item in the list is a ingrident
+            "items": leaf_node_schema, #Each item in the list is a ingredient
         },
     },
+    #These keys must be included in the API reply
     "required": ["name", "status", "conflict", "stall_insight", "children"],
 }
 
@@ -63,6 +67,7 @@ ingredient_tree_schema = {
             "items": component_node_schema, #Each item in the list is a component of a dish
         },
     },
+    #These keys must be included in the API reply
     "required": ["name", "status", "conflict", "stall_insight", "children"],
 }
 
@@ -98,6 +103,7 @@ ai_output_schema = {
         #defines the dish itself from a seperate dictionary
         "ingredient_tree": ingredient_tree_schema,
     },
+    #These keys must be included in the API reply
     "required": [
         "is_safe",
         "risk_level",
@@ -185,6 +191,8 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
     <dish>{dish}</dish>
     <restrictions>{restrictions_str}</restrictions>
     """
+
+    #for loop  allows the api querry to attempt the querry to connect 3 times, if an attempt fails, the loop tries again
     for attempt in range(1, max_tries + 1):
         try:
             response = client.models.generate_content(
@@ -203,7 +211,8 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
             # Gemini needs a list here, so turn it back into {"Halal": "COMPLIANT", ...}
             data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
             return data
+        #catch any error and log into terminal the attempt number and error message
         except Exception as error:
             print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
-            
+    # If all 3 attempts fails, function will return a None Value
     return None
