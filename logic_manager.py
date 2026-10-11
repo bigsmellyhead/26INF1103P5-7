@@ -46,6 +46,15 @@ def validate_and_process_logic(data, restrictions):
             data["dietary_status"][requirement] = "UNCERTAIN"
             data["flags"].append(f"{requirement} changed to UNCERTAIN: the AI cannot verify a certification.")
 
+    # A certification requirement the user listed must always appear in dietary_status.
+    # If the AI skipped it, mark it UNCERTAIN (we cannot verify a certificate)
+    for item in user_restrictions:
+        if item.lower() in certification_requirements:
+            already_listed = any(item.lower() in name.lower() for name in data["dietary_status"])
+            if not already_listed:
+                data["dietary_status"][item.title()] = "UNCERTAIN"
+                data["flags"].append(f"{item.title()} was not assessed by the AI, so it is marked UNCERTAIN.")
+                
     has_conflict = len(data["allergy_conflicts"]) > 0
     non_compliant = "NON-COMPLIANT" in data["dietary_status"].values()
     uncertain = "UNCERTAIN" in data["dietary_status"].values()
