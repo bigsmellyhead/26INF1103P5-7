@@ -1,5 +1,6 @@
 # ai_manager.py
 import json
+import time
 import os
 from google import genai
 from google.genai import types
@@ -194,11 +195,19 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
                 ),
             )
             data = json.loads(response.text)
+
+            # Check the schema before using the data (a failure here is retried by the loop)
+            for key in ai_output_schema["required"]:
+                if key not in data:
+                    raise ValueError(f"Missing required key '{key}'")
+                
             # Gemini needs a list here, so turn it back into {"Halal": "COMPLIANT", ...}
             data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
             return data
         except Exception as error:
             # Will need to create function in io_manager.py to print the below statement as per the hard constraints
             print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
+            if attempt < max_tries:
+                time.sleep(2 * attempt)   # wait 2s after the 1st failure, 4s after the 2nd
             
     return None
