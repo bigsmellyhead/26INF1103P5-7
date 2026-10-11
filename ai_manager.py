@@ -78,7 +78,7 @@ ai_output_schema = {
                 "properties": {
                     "requirement": {
                         "type": "STRING",
-                        "description": "Lifestyle or religious requirement name (e.g. Halal, Vegan, Vegetarian, Kosher)",
+                        "description": "Name of a lifestyle or religious requirement the user listed",
                     },
                     "status": {
                         "type": "STRING",
@@ -117,7 +117,6 @@ ai_prompt = """
     - The restrictions arrive grouped, e.g. "Allergies: peanut; Dietary/religious requirements: halal; Other: g6pd". Treat "Other" items as allergy/medical restrictions unless they are clearly a lifestyle or religious requirement.
     - If the restrictions are "none", there are no restrictions: assess general ingredient transparency only, and return empty lists for allergy_conflicts and dietary_status.
     - ONLY consider restrictions the user listed. NEVER mention or assess a requirement (Halal, Kosher, Vegan, etc.) that is not in their list.
-
     
     HOW TO REASON (Do these steps internally before answering or responding)
     1. Identify the stall. Decide your stall knowledge level and output it in "stall_knowledge":
@@ -130,7 +129,7 @@ ai_prompt = """
         - Cross-contact: shared woks, fryers, grills, ladles, chopping boards, noodle strainers, wash water.
         - Cooking oil/fat: reused deep-fry oil, lard or pork fat, shared oil between seafood/noodle/nut/meat items.
         - Hidden bases: pork or shellfish stock, shrimp paste (belacan), hae bi (dried shrimp), fish sauce, oyster sauce, peanut-based gravies or garnishes, sesame oil, egg wash, soy, wheat in sauces, MSG-style seasoning blends.
-        - Halal and religious factors: whether the stall/centre style implies halal, non-halal, or uncertain status.
+        - Dietary/religious factors: ONLY for the requirements the user listed. Whether this stall's style helps or hurts that requirement.
         - Customisation: common variants (extra sambal, crushed peanuts, add-ons) that change the risk.
     4. When stall knowledge is "Inferred" or "Unknown", be cautious: raise risk for anything you cannot rule out, and say what you assumed. A cautious "uncertain" is better than a confident guess.
     5. Every conclusion must tie back to the user's specific restrictions. Do not list risks that are irrelevant to them.
@@ -151,7 +150,7 @@ ai_prompt = """
     - stall_specific_insights: max 2 sentences on what this stall (or this type of stall) does DIFFERENTLY from the standard recipe, and how that affects THIS user's restrictions. Do NOT list ingredients (the tree does that). If nothing notable differs, say "No notable difference from the standard recipe."
     - cross_contact_risks: ONLY shared equipment, oil or utensil hazards that could realistically carry one of THIS user's restrictions into this dish (e.g. "Wok shared with peanut dishes"). Max 3, each under 8 words. NEVER write generic items like "shared kitchen environment". Use an empty list if there is no specific, relevant risk. Do not put them anywhere else, including the ingredient_tree.
     - allergy_conflicts: allergy/medical names only (e.g. "Peanuts"), no sentences. Use an empty list if none. NEVER put dietary/religious requirements here.
-    - dietary_status: only lifestyle/religious requirements (Halal, Vegan, Vegetarian...). NEVER put allergies or medical conditions here. Use an empty list if none.
+    - dietary_status: exactly one entry for EACH dietary/religious requirement the user listed, and no others. NEVER put allergies or medical conditions here. Use an empty list if the user listed none.
         * Use "NON-COMPLIANT" if the dish itself contains a prohibited ingredient (e.g. pork, lard or alcohol for Halal).
         * For Halal or other religious requirements at a stall you cannot verify, use "UNCERTAIN", never "COMPLIANT".
     - ingredient_tree has at most 3 levels: the dish, its components, and their ingredients. Ingredients (the last level) have no children.
