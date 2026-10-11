@@ -1,17 +1,18 @@
 # io_manager.py
 from data_manager import get_user_profile, save_user_profile
+from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS
 
-DIVIDER = f"----------------------------------------------------------------------"
-SECTION = f"----------------------------------------------------------------------"
+DIVIDER = "=" * 70
+SECTION = "-" * 70
 COLOR_RED = "\033[31m"
 COLOR_YELLOW = "\033[33m"
 COLOR_GREEN = "\033[32m"
 COLOR_RESET= "\033[0m"
 
-RESTRICTIONS_PROMPT = (
-    # --- Prompt for User ---
-    "Enter your allergies/restrictions, separated by commas\n"
-    "(e.g. peanuts, seafood, g6pd, tree nuts): ")
+CUSTOM_PROMPT = (
+    # --- Prompt for anything not in the catalog ---
+    "Type your own allergies/restrictions, separated by commas\n"
+    "(e.g. g6pd, blue berries): ")
 
 def print_user_restrictions(restrictions):
     print(f"  • Allergies & Dietary Needs")
@@ -136,12 +137,124 @@ def parse_restrictions(raw_text):
     items = [r.strip().lower() for r in raw_text.split(",") if r.strip()]
     return items if items else ["none"]
 
-# Input restrictions display
-def prompt_for_restrictions():
-    # --- Prompts the user for Restrictions and Returns ---
-    """Asks the user for their restrictions and returns them as a clean list."""
-    raw_restrictions = input(RESTRICTIONS_PROMPT)
-    return parse_restrictions(raw_restrictions)
+def parse_number_list(raw_text, max_value):
+    # --- Turns "1, 3 4" into [1, 3, 4]. Returns None if anything is invalid ---
+    parts = raw_text.replace(",", " ").split()
+    if not parts or not all(p.isdigit() for p in parts):
+        return None
+    numbers = [int(p) for p in parts]
+    if any(n < 1 or n > max_value for n in numbers):
+        return None
+    return numbers
+
+def show_category_menu(menu_entries, selected, custom_items):
+    # --- Level 1: Allergies first, then Restrictions, then Other ---
+    # menu_entries is a list of (group, title, items) tuples
+    print(f"\n{SECTION}")
+    print(" SELECT YOUR ALLERGIES / RESTRICTIONS")
+    print(SECTION)
+
+    last_group = None
+    for number, (group, title, items) in enumerate(menu_entries, start=1):
+        # Print a group header (ALLERGIES / RESTRICTIONS) whenever the group changes
+        if group != last_group:
+            print(f"\n  {group.upper()}")
+            last_group = group
+
+        ticked = sum(1 for item in items if item.lower() in selected)
+        tag = f"  ({ticked} selected)" if ticked else ""
+        print(f"    {number}. {title}{tag}")
+
+    ticked_custom = sum(1 for item in custom_items if item in selected)
+    tag = f"  ({ticked_custom} selected)" if ticked_custom else ""
+    print("\n  OTHER")
+    print(f"    {len(menu_entries) + 1}. Other (type your own){tag}")
+
+    print("\n  Enter a number to open it.")
+    print("  D = Done    C = Clear everything")
+    print(f"\nCurrently selected: {', '.join(sorted(selected)) if selected else 'none'}")
+
+def run_item_menu(title, items, selected, allow_custom=False):
+    # --- Level 2: tick / untick specific allergens inside one category ---
+    # `selected` (a set) and `items` (a list) are edited in place.
+    while True:
+        print(f"\n{SECTION}")
+        print(f" {title}")
+        print(SECTION)
+
+        if not items:
+            print("  (nothing here yet)")
+        for number, item in enumerate(items, start=1):
+            mark = "x" if item.lower() in selected else " "
+            print(f"  {number}. [{mark}] {item}")
+
+        print("\n  Enter numbers to tick/untick (e.g. 1,3)")
+        extras = "  A = Select all    N = Select none"
+        if allow_custom:
+            extras += "    T = Type a new one"
+        print(extras)
+        print("  B = Back")
+
+        choice = input("Your choice: ").strip().lower()
+
+        if choice == "b":
+            return
+        elif choice == "a":
+            selected.update(item.lower() for item in items)
+        elif choice == "n":
+            selected.difference_update(item.lower() for item in items)
+        elif choice == "t" and allow_custom:
+            raw = input(CUSTOM_PROMPT)
+            for new_item in parse_restrictions(raw):
+                if new_item == "none":
+                    continue
+                if new_item not in items:
+                    items.append(new_item)
+                selected.add(new_item)
+        else:
+            numbers = parse_number_list(choice, len(items))
+            if numbers is None:
+                print("Invalid choice. Please try again.")
+                continue
+            # set() so "1,1" doesn't tick and untick the same item
+            for number in set(numbers):
+                item = items[number - 1].lower()
+                if item in selected:
+                    selected.remove(item)
+                else:
+                    selected.add(item)
+
+def prompt_for_restrictions(current=None):
+    # --- Prompts the user for Restrictions via the category menu and Returns them ---
+    """Walks the user through the allergen menu. Returns a clean list, or ['none']."""
+    # Each entry: (group header, menu title, list of items)
+    menu_entries = [("Allergies", category, items) for category, items in ALLERGEN_CATALOG.items()]
+    menu_entries.append(("Restrictions", "Dietary / religious", DIETARY_RESTRICTIONS))
+    other_number = len(menu_entries) + 1
+
+    # Start from whatever the user already has saved (empty for new users)
+    selected = {r for r in (current or []) if r != "none"}
+
+    # Anything saved earlier that isn't in the catalog is kept under "Other"
+    custom_items = sorted(r for r in selected if r not in KNOWN_ITEMS)
+
+    while True:
+        show_category_menu(menu_entries, selected, custom_items)
+        choice = input("Your choice: ").strip().lower()
+
+        if choice == "d":
+            break
+        elif choice == "c":
+            selected.clear()
+        elif choice.isdigit() and 1 <= int(choice) <= len(menu_entries):
+            group, title, items = menu_entries[int(choice) - 1]
+            run_item_menu(f"{group} > {title}", items, selected)
+        elif choice.isdigit() and int(choice) == other_number:
+            run_item_menu("Other", custom_items, selected, allow_custom=True)
+        else:
+            print("Please enter a number, 'd' or 'c'.")
+
+    return sorted(selected) if selected else ["none"]
 
 # Input handling for user authentication
 def handle_user_authentication():
@@ -176,9 +289,8 @@ def handle_user_authentication():
             print("Please enter only 'y' or 'n'.")
 
         if update_choice == 'y':
-            # --- User wants to overwrite their restrictions ---
-            print()
-            restrictions = prompt_for_restrictions()
+            # --- User wants to change their restrictions (menu opens pre-ticked) ---
+            restrictions = prompt_for_restrictions(current=user_profile['restrictions'])
 
             # Overwrite the profile in the JSON database
             save_user_profile(username, restrictions)
