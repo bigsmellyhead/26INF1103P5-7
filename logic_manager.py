@@ -22,6 +22,12 @@ def raise_score(data, minimum, reason):
 
 certification_requirements = ["halal", "kosher"]
 
+# Flattens the grouped restrictions from io_manager into one plain list of items
+def flatten_restrictions(restrictions):
+    if isinstance(restrictions, dict):
+        return [item for items in restrictions.values() for item in items]
+    return [item for item in restrictions if item != "none"]
+
 def validate_and_process_logic(data, restrictions):
     """
     Applies business rules to the AI result and decides the final outcome.
@@ -29,6 +35,7 @@ def validate_and_process_logic(data, restrictions):
     """
 
     data["flags"] = []
+    user_restrictions = flatten_restrictions(restrictions)
 
     # Keep the score inside 0-100 in case the API goes out of range
     data["risk_score"] = max(0, min(100, data["risk_score"]))
@@ -43,7 +50,7 @@ def validate_and_process_logic(data, restrictions):
     non_compliant = "NON-COMPLIANT" in data["dietary_status"].values()
     uncertain = "UNCERTAIN" in data["dietary_status"].values()
 
-    has_restrictions = restrictions != ["none"]
+    has_restrictions = len(user_restrictions) > 0
     stall_unverified = data["stall_knowledge"] in ["Inferred", "Unknown"]
     ai_noticed_risks = data["risk_score"] >= 10
 
@@ -68,11 +75,6 @@ def validate_and_process_logic(data, restrictions):
     # Conflicts listed but nothing in the tree explains them: flag it, do not change the score
     if has_conflict and not triggers:
         data["flags"].append("Allergy conflicts were listed but no ingredient is marked Trigger. Verify with the vendor.")
-
-    # Stall not really known AND shared-equipment risks: do not leave it in the Low band
-    stall_unverified = data.get("stall_knowledge", "Unknown") in ["Inferred", "Unknown"]
-    if stall_unverified and len(data["cross_contact_risks"]) > 0:
-        raise_score(data, 30, "unverified stall with cross-contact risks.")
 
     # Deterministic safety rule override: >= 60% or High risk means unsafe
     # 30% -59% = Medium risk , 1%-29% = Lowrisk, < 1% = Negligible risk
