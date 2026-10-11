@@ -1,10 +1,13 @@
 # ai_manager.py
 import json
 import os
+import logging
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv 
 
+
+logging.basicConfig(filename="api.logs", filemode="a",level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s")
 
 #This is so that we do not have to keep putting our own API key into the terminal
 load_dotenv()                  
@@ -75,6 +78,7 @@ ingredient_tree_schema = {
 ai_output_schema = {
     "type": "OBJECT",
     "properties": {
+        "stall_knowledge": {"type": "STRING", "enum": ["Known", "Inferred", "Unknown"]},
         "is_safe": {"type": "BOOLEAN"},
         "risk_level": {"type": "STRING", "enum": ["Low", "Medium", "High"]},
         "risk_score": {"type": "INTEGER", "minimum": 0, "maximum": 100},
@@ -105,6 +109,7 @@ ai_output_schema = {
     },
     #These keys must be included in the API reply
     "required": [
+        "stall_knowledge"
         "is_safe",
         "risk_level",
         "risk_score",
@@ -173,6 +178,7 @@ ai_prompt = """
 def query_ai_safety_auditor(stall, dish, restrictions_list):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
+         logging.error("GEMINI_API_KEY is not set")
          print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
          return None
 
@@ -208,11 +214,13 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
                 ),
             )
             data = json.loads(response.text)
+
             # Gemini needs a list here, so turn it back into {"Halal": "COMPLIANT", ...}
             data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
             return data
         #catch any error and log into terminal the attempt number and error message
         except Exception as error:
+            logging.error(f"Attempt {attempt}/{max_tries}:API call has failed: {error} ")
             print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
     # If all 3 attempts fails, function will return a None Value
     return None
