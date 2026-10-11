@@ -92,6 +92,7 @@ ai_output_schema = {
         "ingredient_tree": ingredient_tree_schema,
     },
     "required": [
+        "stall_knowledge",
         "is_safe",
         "risk_level",
         "risk_score",
@@ -144,8 +145,8 @@ ai_prompt = """
     - NEVER state who owns or runs a stall, the owners' religion, or that a stall holds any certification (halal, etc.), unless it is a major chain whose certification is widely documented. You cannot see certificates. Describe cuisine style, not people.
     - Describe how this stall actually works only if you genuinely know it. Otherwise describe the typical practice for this type of stall and phrase it as "typically" or "likely". NEVER present a guess as fact, and never lower the risk because you assume a stall is careful.
     - reasoning: 1-2 sentences, max 40 words. The verdict only: name the restriction and the single biggest cause. NO ingredient lists, NO cross-contact lists.
-    - stall_specific_insights: max 2 sentences on how this stall (or this type of stall) prepares this dish differently from the standard recipe: typical cooking base, sauces, what is usually added. Do NOT mention shared equipment (that belongs in cross_contact_risks), do NOT restate the reasoning, and do NOT repeat anything already given in a node's stall_insight.
-    - cross_contact_risks: shared equipment, oil or utensil hazards ONLY, max 3, each under 8 words (e.g. "Shared serving ladles"). Do not put them anywhere else, including the ingredient_tree.
+    - stall_specific_insights: max 2 sentences on what this stall (or this type of stall) does DIFFERENTLY from the standard recipe, and how that affects THIS user's restrictions. Do NOT list ingredients (the tree does that). If nothing notable differs, say "No notable difference from the standard recipe."
+    - cross_contact_risks: ONLY shared equipment, oil or utensil hazards that could realistically carry one of THIS user's restrictions into this dish (e.g. "Wok shared with peanut dishes"). Max 3, each under 8 words. NEVER write generic items like "shared kitchen environment". Use an empty list if there is no specific, relevant risk. Do not put them anywhere else, including the ingredient_tree.
     - allergy_conflicts: allergy/medical names only (e.g. "Peanuts"), no sentences. Use an empty list if none. NEVER put dietary/religious requirements here.
     - dietary_status: only lifestyle/religious requirements (Halal, Vegan, Vegetarian...). NEVER put allergies or medical conditions here. Use an empty list if none.
         * Use "NON-COMPLIANT" if the dish itself contains a prohibited ingredient (e.g. pork, lard or alcohol for Halal).
