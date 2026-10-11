@@ -1,0 +1,10 @@
+# Ignore local environment files or secret keys
+.env
+*.env
+
+# Ignore local JSON database so personal data isn't pushed
+audit_history.json
+
+# Ignore Python compiled cache files
+__pycache__/
+*.pyc

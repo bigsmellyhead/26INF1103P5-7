@@ -21,10 +21,10 @@ def main():
             print("\nProcessing audit with temporary local reasoning engine...")
 
              # Query LLM API
-            raw_ai_output = query_ai_safety_auditor(stall, dish, restrictions)
+            ai_output = query_ai_safety_auditor(stall, dish, restrictions)
 
             # Validate schema and enforce rules
-            processed_data = validate_and_process_logic(raw_ai_output)
+            processed_data = validate_and_process_logic(ai_output, restrictions)
 
             # Form final log entry
             final_record = {

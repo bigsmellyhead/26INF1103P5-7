@@ -1,4 +1,96 @@
 {
-    "users": {},
-    "audit_logs": []
+    "users": {
+        "tom": {
+            "username": "Tom",
+            "restrictions": {
+                "allergies": [
+                    "cheese",
+                    "oats",
+                    "prawn"
+                ],
+                "dietary_restrictions": [],
+                "other": []
+            }
+        }
+    },
+    "audit_logs": [
+        {
+            "username": "Tom",
+            "restrictions": {
+                "allergies": [
+                    "cheese",
+                    "oats",
+                    "prawn"
+                ],
+                "dietary_restrictions": [],
+                "other": []
+            },
+            "stall": "JI JI NOODLE HOUSE",
+            "dish": "WANTON MEE",
+            "stall_knowledge": "Inferred",
+            "is_safe": false,
+            "risk_level": "High",
+            "risk_score": 90,
+            "stall_specific_insights": "This noodle house typically uses lard and pork-based components in their signature sauces.",
+            "reasoning": "Contains pork and gluten, violating dietary and allergy restrictions.",
+            "cross_contact_risks": [
+                "Shared boiling water for noodles"
+            ],
+            "dietary_status": {
+                "Halal": "NON-COMPLIANT"
+            },
+            "allergy_conflicts": [
+                "Gluten"
+            ],
+            "ingredient_tree": {
+                "name": "WANTON MEE",
+                "status": "Trigger",
+                "conflict": null,
+                "stall_insight": null,
+                "children": [
+                    {
+                        "name": "Egg Noodles",
+                        "status": "Trigger",
+                        "conflict": null,
+                        "stall_insight": null,
+                        "children": [
+                            {
+                                "name": "Wheat Flour",
+                                "status": "Trigger",
+                                "conflict": "Contains gluten",
+                                "stall_insight": null
+                            },
+                            {
+                                "name": "Egg",
+                                "status": "Safe",
+                                "conflict": null,
+                                "stall_insight": null
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Char Siew",
+                        "status": "Trigger",
+                        "conflict": null,
+                        "stall_insight": null,
+                        "children": [
+                            {
+                                "name": "Pork",
+                                "status": "Trigger",
+                                "conflict": "Prohibited animal product",
+                                "stall_insight": null
+                            },
+                            {
+                                "name": "Soy Sauce",
+                                "status": "Safe",
+                                "conflict": null,
+                                "stall_insight": null
+                            }
+                        ]
+                    }
+                ]
+            },
+            "flags": []
+        }
+    ]
 }
