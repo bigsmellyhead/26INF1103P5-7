@@ -159,7 +159,26 @@ ai_prompt = """
       * Do NOT repeat the main dish name inside child components (e.g. use "Oily Rice", NOT "Chicken Rice (Oily Rice)").
     """
 
-def query_ai_safety_auditor(stall, dish, restrictions_list):
+
+def restrictions_to_text(restrictions):
+    """Turns the saved restrictions into labelled text for the prompt.
+    io_manager saves them as {"allergies": [...], "dietary_restrictions": [...], "other": [...]}
+    """
+    # Older flat-list format, e.g. ["peanuts", "halal"] or ["none"]
+    if not isinstance(restrictions, dict):
+        items = [item for item in restrictions if item != "none"]
+        return ", ".join(items) if items else "none"
+
+    labels = [("allergies", "Allergies"), ("dietary_restrictions", "Dietary/religious requirements"), ("other", "Other")]
+    parts = []
+    for key, label in labels:
+        items = restrictions.get(key, [])
+        if items:
+            parts.append(f"{label}: {', '.join(items)}")
+    return "; ".join(parts) if parts else "none"
+
+
+def query_ai_safety_auditor(stall, dish, restrictions):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
           # Will need to create function in io_manager.py to print the below statement as per the hard constraints
@@ -168,7 +187,7 @@ def query_ai_safety_auditor(stall, dish, restrictions_list):
 
     client = genai.Client(api_key=api_key)
 
-    restrictions_str = ", ".join(restrictions_list)
+    restrictions_str = ", ".join(restrictions)
 
     # Strip angle brackets so user input can't close our tags early
     stall = stall.replace("<", "").replace(">", "")
