@@ -131,3 +131,92 @@ def test_print_user_restrictions_missing_keys(capsys):
     assert "Dietary Restrictions: None" in output
     assert "Others: None" in output
 
+
+# --------------------------------------------------
+# print_risk_assessment()
+# --------------------------------------------------
+
+@pytest.mark.parametrize(
+    "level, color",
+    [
+        ("High", io.COLOR_RED),
+        ("Medium", io.COLOR_YELLOW),
+        ("Low", io.COLOR_GREEN),
+    ],
+)
+def test_print_risk_assessment_uses_correct_color(
+    level, color, capsys
+):
+    io.print_risk_assessment({
+        "risk_level": level,
+        "is_safe": False,
+        "risk_score": 85,
+        "reasoning": "A conflicting ingredient was detected.",
+    })
+
+    output = capsys.readouterr().out
+
+    assert color in output
+    assert f"85% ({level})" in output
+    assert "NOT SAFE / AVOID" in output
+    assert "A conflicting ingredient was detected." in output
+    assert io.COLOR_RESET in output
+
+
+def test_print_risk_assessment_safe_verdict(capsys):
+    io.print_risk_assessment({
+        "risk_level": "Low",
+        "is_safe": True,
+        "risk_score": 0,
+        "reasoning": "No known conflicts.",
+    })
+
+    output = capsys.readouterr().out
+
+    assert "SAFE TO EAT" in output
+    assert "NOT SAFE / AVOID" not in output
+
+
+def test_print_risk_assessment_unknown_level(capsys):
+    io.print_risk_assessment({
+        "risk_level": "Unknown",
+        "is_safe": False,
+        "risk_score": 50,
+        "reasoning": "Insufficient information.",
+    })
+
+    output = capsys.readouterr().out
+
+    assert "Risk Assessment: 50% (Unknown)" in output
+    assert "NOT SAFE / AVOID" in output
+
+
+# --------------------------------------------------
+# print_allergy_conflicts()
+# --------------------------------------------------
+
+def test_print_allergy_conflicts_empty(capsys):
+    io.print_allergy_conflicts({"allergy_conflicts": []})
+
+    output = capsys.readouterr().out
+
+    assert "DETECTED CONFLICTS: None" in output
+
+
+def test_print_allergy_conflicts_multiple(capsys):
+    io.print_allergy_conflicts({
+        "allergy_conflicts": ["Peanut", "Milk"],
+    })
+
+    output = capsys.readouterr().out
+
+    assert "DETECTED CONFLICTS:" in output
+    assert "Peanut" in output
+    assert "Milk" in output
+    assert output.count("[ALLERGY VIOLATION]") == 2
+
+
+def test_print_allergy_conflicts_missing_key(capsys):
+    io.print_allergy_conflicts({})
+
+    assert "DETECTED CONFLICTS: None" in capsys.readouterr().out
