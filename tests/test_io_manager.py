@@ -220,3 +220,67 @@ def test_print_allergy_conflicts_missing_key(capsys):
     io.print_allergy_conflicts({})
 
     assert "DETECTED CONFLICTS: None" in capsys.readouterr().out
+# --------------------------------------------------
+# print_dietary_status()
+# --------------------------------------------------
+
+def test_print_dietary_status_empty(capsys):
+    io.print_dietary_status({"dietary_status": {}})
+
+    assert "DIETARY STATUS: None" in capsys.readouterr().out
+
+
+def test_print_dietary_status_values(capsys):
+    io.print_dietary_status({
+        "dietary_status": {
+            "Vegetarian": "Not suitable",
+            "Halal": "Unknown",
+        }
+    })
+
+    output = capsys.readouterr().out
+
+    assert "Vegetarian: Not suitable" in output
+    assert "Halal: Unknown" in output
+
+
+def test_print_dietary_status_missing_key(capsys):
+    io.print_dietary_status({})
+
+    assert "DIETARY STATUS: None" in capsys.readouterr().out
+
+
+# --------------------------------------------------
+# print_cross_contact_risks()
+# --------------------------------------------------
+
+def test_print_cross_contact_risks_empty(capsys):
+    io.print_cross_contact_risks({"cross_contact_risks": []})
+
+    assert "Cross-Contamination Risks: None" in (
+        capsys.readouterr().out
+    )
+
+
+def test_print_cross_contact_risks_multiple(capsys):
+    io.print_cross_contact_risks({
+        "cross_contact_risks": [
+            "Shared fryer",
+            "Shared utensils",
+        ]
+    })
+
+    output = capsys.readouterr().out
+
+    assert "Shared fryer" in output
+    assert "Shared utensils" in output
+    assert output.count("[ENVIRONMENTAL RISK]") == 2
+
+
+def test_print_cross_contact_risks_missing_key(capsys):
+    io.print_cross_contact_risks({})
+
+    assert "Cross-Contamination Risks: None" in (
+        capsys.readouterr().out
+    )
+
