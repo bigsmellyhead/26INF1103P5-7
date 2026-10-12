@@ -1,5 +1,10 @@
 # logic_manager.py
 
+# Takes the AI's already-validated record (schema checks are in ai_manager.py) plus the user's restrictions, applies deterministic business rules and returns the final record.
+# The AI is never the last word on safety: these rules can only RAISE risk, never lower it.
+# Expects: risk_score, stall_knowledge, dietary_status (dict), allergy_conflicts, cross_contact_risks, ingredient_tree.
+# Adds: "flags", a list of reasons whenever a rule changed or questioned the AI's verdict.
+
 # Removes a child that just repeats its parent's name (e.g. Rice > Rice), keeping its verdict on the parent
 def remove_repeated_children(node):
     if "children" not in node:
@@ -64,7 +69,7 @@ def validate_and_process_logic(data, restrictions):
     # Keep the score inside 0-100 in case the API goes out of range
     data["risk_score"] = max(0, min(100, data["risk_score"]))
 
-    # The AI cannot verify certificates, so COMPLIANT is never accepted for them
+    # The AI cannot verify certificates, so COMPLIANT is never accepted for them. This must also run before "uncertain" because it can add or change UNCERTAIN entries.
     for requirement, status in list(data["dietary_status"].items()):
         if status == "COMPLIANT" and any(word in requirement.lower() for word in certification_requirements):
             data["dietary_status"][requirement] = "UNCERTAIN"
@@ -85,6 +90,8 @@ def validate_and_process_logic(data, restrictions):
 
     has_restrictions = len(user_restrictions) > 0
     stall_unverified = data["stall_knowledge"] in ["Inferred", "Unknown"]
+
+    # AI's own score, taken BEFORE any rule below raises it, so a clearly low rating is not bumped just because the AI listed a generic cross-contact note
     ai_noticed_risks = data["risk_score"] >= 10
 
     remove_repeated_children(data["ingredient_tree"])
@@ -95,7 +102,7 @@ def validate_and_process_logic(data, restrictions):
         if node.get("stall_insight"):
             data["flags"].append(f"Stall practice affects '{node['name']}': {node['stall_insight']}")
 
-    # Stall not really known AND user has restrictions AND shared-equipment risks: cannot stay in the Low band
+    # Multi-conditional check; Stall not really known AND user has restrictions AND shared-equipment risks AND AI also noticed risks, cannot stay in the Low band
     if has_restrictions and stall_unverified and len(data["cross_contact_risks"]) > 0 and ai_noticed_risks:
         raise_score(data, 30, "unverified stall with cross-contact risks.")
 
@@ -103,7 +110,7 @@ def validate_and_process_logic(data, restrictions):
     if has_conflict or non_compliant:
         raise_score(data, 60, "the AI reported a conflict or non-compliant status.")
 
-    # An UNCERTAIN status can never be less than Moderate
+    # An UNCERTAIN status can never be less than Medium
     if uncertain:
         raise_score(data, 30, "a dietary requirement is UNCERTAIN.")
 
@@ -115,15 +122,22 @@ def validate_and_process_logic(data, restrictions):
     if has_conflict and not triggers:
         data["flags"].append("Allergy conflicts were listed but no ingredient is marked Trigger. Verify with the vendor.")
 
-    # Deterministic safety rule override: >= 60% or High risk means unsafe
-    # 30% -59% = Medium risk , 1%-29% = Lowrisk, < 1% = Negligible risk
+    # The AI's own risk level counts too: never end up below what the AI said
+    if data["risk_level"] == "High":
+        raise_score(data, 60, "the AI rated the dish High risk.")
+
+    elif data["risk_level"] == "Medium":
+        raise_score(data, 30, "the AI rated the dish Medium risk.")
+
+    # Low = 0-29 (safe), Medium = 30-59, High = 60-100 (Same as ai_manager.py scoring in prompt)
     if data["risk_score"] >= 60 :
         data["is_safe"] = False
         data["risk_level"] = "High"
+
     elif data["risk_score"] >= 30 :
         data["is_safe"] = False
         data["risk_level"] = "Medium"
-    # incase api gives risk score like 0.5 etc
+
     else:
         data["is_safe"] = True
         data["risk_level"] = "Low"
