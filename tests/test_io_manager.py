@@ -558,3 +558,31 @@ def test_display_audit_result_displays_conflicts(capsys):
     assert "NOT SAFE / AVOID" in output
     assert "Peanut" in output
     assert "Shared fryer" in output
+    
+# --------------------------------------------------
+# get_user_inputs()
+# --------------------------------------------------
+
+def test_get_user_inputs_strips_whitespace(monkeypatch):
+    answers = iter([
+        "  Maxwell Food Centre  ",
+        "  Chicken Rice  ",
+    ])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+
+    stall, dish = io.get_user_inputs()
+
+    assert stall == "Maxwell Food Centre"
+    assert dish == "Chicken Rice"
+
+
+def test_get_user_inputs_allows_empty_strings(monkeypatch):
+    answers = iter(["", ""])
+    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+
+    stall, dish = io.get_user_inputs()
+
+    # Documents current behavior: empty values are not rejected.
+    assert stall == ""
+    assert dish == ""
+
