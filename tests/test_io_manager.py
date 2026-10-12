@@ -85,3 +85,49 @@ def test_parse_restrictions(raw, expected):
 )
 def test_parse_number_list(raw, maximum, expected):
     assert io.parse_number_list(raw, maximum) == expected
+
+# --------------------------------------------------
+# print_user_restrictions()
+# --------------------------------------------------
+
+def test_print_user_restrictions(capsys):
+    io.print_user_restrictions({
+        "allergies": ["egg", "peanut"],
+        "dietary_restrictions": ["vegetarian"],
+        "others": ["g6pd"],
+    })
+
+    output = capsys.readouterr().out
+
+    assert "Allergies" in output
+    assert "egg" in output
+    assert "peanut" in output
+    assert "Dietary Restrictions" in output
+    assert "vegetarian" in output
+    assert "Others" in output
+    assert "g6pd" in output
+
+
+def test_print_user_restrictions_empty_lists(capsys):
+    io.print_user_restrictions({
+        "allergies": [],
+        "dietary_restrictions": [],
+        "others": [],
+    })
+
+    output = capsys.readouterr().out
+
+    assert "Allergies: None" in output
+    assert "Dietary Restrictions: None" in output
+    assert "Others: None" in output
+
+
+def test_print_user_restrictions_missing_keys(capsys):
+    io.print_user_restrictions({})
+
+    output = capsys.readouterr().out
+
+    assert "Allergies: None" in output
+    assert "Dietary Restrictions: None" in output
+    assert "Others: None" in output
+
