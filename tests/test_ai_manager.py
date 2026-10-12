@@ -184,3 +184,60 @@ def test_nullable_does_not_allow_wrong_type():
     assert am.check_schema(
         123, {"type": "STRING", "nullable": True}
     )
+# =========================================================
+# 3. check_schema(): ENUMS AND NUMBER LIMITS
+# =========================================================
+
+@pytest.mark.parametrize("value", ["Safe", "Trigger"])
+def test_valid_enum(value):
+    assert am.check_schema(value, {
+        "type": "STRING",
+        "enum": ["Safe", "Trigger"],
+    }) == []
+
+
+def test_invalid_enum():
+    problems = am.check_schema("Danger", {
+        "type": "STRING",
+        "enum": ["Safe", "Trigger"],
+    })
+
+    assert any("not allowed" in p for p in problems)
+
+
+@pytest.mark.parametrize("value", [0, 50, 100])
+def test_valid_number_boundaries(value):
+    assert am.check_schema(value, {
+        "type": "INTEGER",
+        "minimum": 0,
+        "maximum": 100,
+    }) == []
+
+
+def test_number_below_minimum():
+    problems = am.check_schema(-1, {
+        "type": "INTEGER", "minimum": 0
+    })
+
+    assert any("too small" in p for p in problems)
+
+
+def test_number_above_maximum():
+    problems = am.check_schema(101, {
+        "type": "INTEGER", "maximum": 100
+    })
+
+    assert any("too big" in p for p in problems)
+
+
+def test_enum_and_range_both_checked():
+    problems = am.check_schema(5, {
+        "type": "INTEGER",
+        "enum": [1, 2, 3],
+        "minimum": 1,
+        "maximum": 3,
+    })
+
+    assert any("not allowed" in p for p in problems)
+    assert any("too big" in p for p in problems)
+
