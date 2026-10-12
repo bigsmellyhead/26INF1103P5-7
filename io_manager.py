@@ -178,6 +178,11 @@ def print_children_tree(starting_node, prefix = ""):
              print(f"{prefix}{symbol_startTree}{child_name} {child_verdict}")
              indentation = "│   "
 
+        # Show the stall-specific note under the ingredient it applies to
+        child_insight = child.get("stall_insight")
+        if child_insight:
+            print(f"{prefix}{indentation}↳ {COLOR_YELLOW}Stall: {child_insight}{COLOR_RESET}")
+            
         if("children" in child):
             print_children_tree(child, prefix + indentation)
 
@@ -434,3 +439,10 @@ def get_user_inputs():
     dish = input("Enter Dish Name (e.g., Chicken Rice): ").strip()
 
     return stall, dish
+
+# --- AI Error Display Helpers ---
+def display_api_key_error():
+    print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
+
+def display_attempt_error(attempt, max_tries, error):
+    print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
