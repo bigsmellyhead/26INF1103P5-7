@@ -696,3 +696,137 @@ def test_input_dictionary_not_modified(monkeypatch):
 
     assert restrictions == original
 
+# =========================================================
+# 10. RETRIES, EXCEPTIONS, LOGGING
+# =========================================================
+
+def test_invalid_json_retried_then_succeeds(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(monkeypatch, results=[
+        response("{invalid json"),
+        response(json.dumps(valid_reply())),
+    ])
+    sleep = Mock()
+    monkeypatch.setattr(am.time, "sleep", sleep)
+
+    result = am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    assert result is not None
+    assert client.models.generate_content.call_count == 2
+    sleep.assert_called_once_with(2)
+
+
+def test_invalid_schema_retried_then_succeeds(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    invalid = valid_reply()
+    invalid["risk_score"] = 999
+
+    client = mock_gemini(monkeypatch, results=[
+        response(json.dumps(invalid)),
+        response(json.dumps(valid_reply())),
+    ])
+    monkeypatch.setattr(am.time, "sleep", Mock())
+
+    result = am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    assert result is not None
+    assert client.models.generate_content.call_count == 2
+
+
+def test_api_exception_retried_then_succeeds(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(monkeypatch, side_effect=[
+        RuntimeError("Temporary failure"),
+        response(json.dumps(valid_reply())),
+    ])
+    monkeypatch.setattr(am.time, "sleep", Mock())
+
+    result = am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    assert result is not None
+    assert client.models.generate_content.call_count == 2
+
+
+def test_all_attempts_fail_returns_none(monkeypatch, caplog):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(
+        monkeypatch,
+        side_effect=RuntimeError("API unavailable"),
+    )
+    display_error = am.display_attempt_error
+    sleep = Mock()
+    monkeypatch.setattr(am.time, "sleep", sleep)
+
+    with caplog.at_level(logging.ERROR):
+        result = am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    assert result is None
+    assert client.models.generate_content.call_count == am.max_tries
+    assert display_error.call_count == am.max_tries
+    assert sleep.call_args_list == [call(2), call(4)]
+    assert "API unavailable" in caplog.text
+
+
+def test_logs_each_failed_attempt(monkeypatch, caplog):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    mock_gemini(
+        monkeypatch,
+        side_effect=RuntimeError("Test failure"),
+    )
+    monkeypatch.setattr(am.time, "sleep", Mock())
+
+    with caplog.at_level(logging.ERROR):
+        am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    logs = [
+        record.message for record in caplog.records
+        if "API has error" in record.message
+    ]
+
+    assert len(logs) == am.max_tries
+    assert "Attempt 1/" in logs[0]
+    assert "Attempt 2/" in logs[1]
+    assert "Attempt 3/" in logs[2]
+
+
+def test_retry_delays_increase(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    mock_gemini(
+        monkeypatch,
+        side_effect=RuntimeError("Failure"),
+    )
+    sleep = Mock()
+    monkeypatch.setattr(am.time, "sleep", sleep)
+
+    am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    assert sleep.call_args_list == [call(2), call(4)]
+
+
+def test_no_sleep_after_last_attempt(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    mock_gemini(
+        monkeypatch,
+        side_effect=RuntimeError("Failure"),
+    )
+    sleep = Mock()
+    monkeypatch.setattr(am.time, "sleep", sleep)
+
+    am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    assert sleep.call_count == am.max_tries - 1
+
+
+def test_none_response_text_retried(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(monkeypatch, results=[
+        response(None),
+        response(json.dumps(valid_reply())),
+    ])
+    monkeypatch.setattr(am.time, "sleep", Mock())
+
+    result = am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    assert result is not None
+    assert client.models.generate_content.call_count == 2
+
