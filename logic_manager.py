@@ -58,10 +58,6 @@ def flatten_restrictions(restrictions):
     return [item for item in restrictions if item != "none"]
 
 def validate_and_process_logic(data, restrictions):
-    """
-    Applies business rules to the AI result and decides the final outcome.
-    Schema validation moved to ai_manager.py
-    """
 
     data["flags"] = []
     user_restrictions = flatten_restrictions(restrictions)
