@@ -131,3 +131,56 @@ def test_restrictions_do_not_modify_input():
     assert original == saved
 
 
+# =========================================================
+# 2. check_schema(): BASIC TYPES AND NULL
+# =========================================================
+
+@pytest.mark.parametrize("schema_type,value,schema", [
+    ("STRING", "hello", {"type": "STRING"}),
+    ("INTEGER", 123, {"type": "INTEGER"}),
+    ("BOOLEAN", True, {"type": "BOOLEAN"}),
+    ("ARRAY", [], {
+        "type": "ARRAY",
+        "items": {"type": "STRING"}
+    }),
+    ("OBJECT", {}, {
+        "type": "OBJECT",
+        "required": [],
+        "properties": {}
+    }),
+])
+def test_valid_basic_types(schema_type, value, schema):
+    assert am.check_schema(value, schema) == []
+
+
+@pytest.mark.parametrize("schema_type,value", [
+    ("STRING", 123),
+    ("INTEGER", "123"),
+    ("BOOLEAN", 1),
+    ("ARRAY", {}),
+    ("OBJECT", []),
+])
+def test_invalid_basic_types(schema_type, value):
+    problems = am.check_schema(
+        value, {"type": schema_type}
+    )
+
+    assert any("wrong type" in p for p in problems)
+
+
+def test_null_not_allowed():
+    assert am.check_schema(
+        None, {"type": "STRING"}
+    ) == ["reply is empty"]
+
+
+def test_null_allowed():
+    assert am.check_schema(
+        None, {"type": "STRING", "nullable": True}
+    ) == []
+
+
+def test_nullable_does_not_allow_wrong_type():
+    assert am.check_schema(
+        123, {"type": "STRING", "nullable": True}
+    )
