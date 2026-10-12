@@ -351,3 +351,137 @@ def test_has_triggered_descendant_trigger_without_conflict():
     # A Trigger status alone is not enough for this function.
     assert io.has_triggered_descendant(node) is False
 
+# --------------------------------------------------
+# print_children_tree()
+# --------------------------------------------------
+
+def test_print_children_tree_single_child(capsys):
+    tree = {
+        "name": "Dish",
+        "children": [
+            {
+                "name": "Rice",
+                "status": "Safe",
+                "conflict": None,
+                "children": [],
+            }
+        ],
+    }
+
+    io.print_children_tree(tree)
+
+    output = capsys.readouterr().out
+
+    assert "└── Rice" in output
+    assert "(Safe)" in output
+    assert io.COLOR_GREEN in output
+
+
+def test_print_children_tree_trigger_conflict_is_red(capsys):
+    tree = {
+        "name": "Dish",
+        "children": [
+            {
+                "name": "Peanut sauce",
+                "status": "Trigger",
+                "conflict": "Peanut allergy",
+                "children": [],
+            }
+        ],
+    }
+
+    io.print_children_tree(tree)
+
+    output = capsys.readouterr().out
+
+    assert "Peanut sauce" in output
+    assert "[Trigger: Peanut allergy]" in output
+    assert io.COLOR_RED in output
+
+
+def test_print_children_tree_nested_child(capsys):
+    tree = {
+        "name": "Dish",
+        "children": [
+            {
+                "name": "Sauce",
+                "status": "Safe",
+                "conflict": None,
+                "children": [
+                    {
+                        "name": "Peanut",
+                        "status": "Trigger",
+                        "conflict": "Peanut allergy",
+                        "children": [],
+                    }
+                ],
+            }
+        ],
+    }
+
+    io.print_children_tree(tree)
+
+    output = capsys.readouterr().out
+
+    assert "Sauce" in output
+    assert "Peanut" in output
+    assert "[Trigger: Peanut allergy]" in output
+
+
+def test_print_children_tree_stall_insight(capsys):
+    tree = {
+        "name": "Dish",
+        "children": [
+            {
+                "name": "Chicken",
+                "status": "Safe",
+                "conflict": None,
+                "children": [],
+                "stall_insight": "Cooked separately on request.",
+            }
+        ],
+    }
+
+    io.print_children_tree(tree)
+
+    output = capsys.readouterr().out
+
+    assert "Stall: Cooked separately on request." in output
+    assert io.COLOR_YELLOW in output
+
+
+def test_print_children_tree_empty_children(capsys):
+    io.print_children_tree({"name": "Dish", "children": []})
+
+    assert capsys.readouterr().out == ""
+
+
+# --------------------------------------------------
+# print_ingredient_breakdown_tree()
+# --------------------------------------------------
+
+def test_print_ingredient_breakdown_tree_none():
+    # Empty result data should return without printing.
+    assert io.print_ingredient_breakdown_tree(None) is None
+
+
+def test_print_ingredient_breakdown_tree_valid(capsys):
+    io.print_ingredient_breakdown_tree({
+        "ingredient_tree": {
+            "name": "Chicken Rice",
+            "children": [
+                {
+                    "name": "Chicken",
+                    "status": "Safe",
+                    "conflict": None,
+                    "children": [],
+                }
+            ],
+        }
+    })
+
+    output = capsys.readouterr().out
+
+    assert "FULL INGREDIENT BREAKDOWN" in output
+    assert "Dish: Chicken Rice" in output
+    assert "Chicken" in output
