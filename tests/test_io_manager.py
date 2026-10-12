@@ -558,7 +558,7 @@ def test_display_audit_result_displays_conflicts(capsys):
     assert "NOT SAFE / AVOID" in output
     assert "Peanut" in output
     assert "Shared fryer" in output
-    
+
 # --------------------------------------------------
 # get_user_inputs()
 # --------------------------------------------------
@@ -586,3 +586,20 @@ def test_get_user_inputs_allows_empty_strings(monkeypatch):
     assert stall == ""
     assert dish == ""
 
+# --------------------------------------------------
+# AI error display helpers
+# --------------------------------------------------
+
+def test_display_api_key_error(capsys):
+    io.display_api_key_error()
+
+    assert "GEMINI_API_KEY is not set" in capsys.readouterr().out
+
+
+def test_display_attempt_error(capsys):
+    io.display_attempt_error(2, 3, "Temporary error")
+
+    output = capsys.readouterr().out
+
+    assert "Attempt 2/3 failed" in output
+    assert "Temporary error" in output
