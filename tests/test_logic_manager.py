@@ -83,3 +83,104 @@ def test_flatten_empty_grouped_restrictions():
         "others": [],
     }) == []
 
+# --------------------------------------------------
+# remove_repeated_children()
+# --------------------------------------------------
+
+def test_remove_repeated_child_case_insensitive():
+    tree = make_node(
+        "Rice",
+        children=[
+            make_node("rice", children=[]),
+            make_node("Chicken", children=[]),
+        ],
+    )
+
+    lm.remove_repeated_children(tree)
+
+    assert [child["name"] for child in tree["children"]] == [
+        "Chicken"
+    ]
+
+
+def test_remove_repeated_trigger_child_propagates_conflict():
+    tree = make_node(
+        "Rice",
+        status="Safe",
+        conflict=None,
+        children=[
+            make_node(
+                "Rice",
+                status="Trigger",
+                conflict="Rice allergy",
+                children=[],
+            )
+        ],
+    )
+
+    lm.remove_repeated_children(tree)
+
+    assert tree["status"] == "Trigger"
+    assert tree["conflict"] == "Rice allergy"
+    assert tree["children"] == []
+
+
+def test_remove_repeated_child_keeps_existing_parent_conflict():
+    tree = make_node(
+        "Rice",
+        status="Safe",
+        conflict="Existing reason",
+        children=[
+            make_node(
+                "Rice",
+                status="Trigger",
+                conflict="New reason",
+                children=[],
+            )
+        ],
+    )
+
+    lm.remove_repeated_children(tree)
+
+    assert tree["conflict"] == "Existing reason"
+
+
+def test_remove_repeated_child_keeps_grandchildren():
+    tree = make_node(
+        "Rice",
+        children=[
+            make_node(
+                "Rice",
+                children=[
+                    make_node("Peanut", children=[])
+                ],
+            )
+        ],
+    )
+
+    lm.remove_repeated_children(tree)
+
+    assert len(tree["children"]) == 1
+    assert tree["children"][0]["name"] == "Peanut"
+
+
+def test_remove_repeated_children_does_not_remove_different_names():
+    tree = make_node(
+        "Rice",
+        children=[
+            make_node("Brown Rice", children=[]),
+            make_node("Rice Flour", children=[]),
+        ],
+    )
+
+    lm.remove_repeated_children(tree)
+
+    assert len(tree["children"]) == 2
+
+
+def test_remove_repeated_children_handles_missing_children():
+    tree = make_node("Rice")
+
+    # Leaf nodes without a children key should be allowed.
+    assert lm.remove_repeated_children(tree) is None
+    assert "children" not in tree
