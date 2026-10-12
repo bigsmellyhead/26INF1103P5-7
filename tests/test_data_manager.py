@@ -99,3 +99,28 @@ def test_create_default_db_writes_default_structure(temp_database):
 
     assert data == {"users": {}, "audit_logs": []}
 
+# -------------------------
+# load_database()
+# -------------------------
+
+def test_load_database_returns_database_contents(temp_database):
+    expected = {
+        "users": {"alex": {"username": "Alex", "restrictions": ["vegan"]}},
+        "audit_logs": [{"dish": "Salad", "risk_score": 0}]
+    }
+
+    with open(temp_database, "w") as file:
+        json.dump(expected, file)
+
+    result = dm.load_database()
+
+    assert result == expected
+
+
+def test_load_database_creates_file_if_missing(temp_database):
+    result = dm.load_database()
+
+    assert result == {"users": {}, "audit_logs": []}
+    assert temp_database.exists()
+
+
