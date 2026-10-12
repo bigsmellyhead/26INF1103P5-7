@@ -22,17 +22,17 @@ KNOWN_DIETARY = {item.lower() for item in DIETARY_RESTRICTIONS}
 KNOWN_ITEMS = KNOWN_ALLERGENS | KNOWN_DIETARY
 
 def group_restrictions(restrictions):
-
-    groups = {"allergies": [], "restrictions": [], "other": []}
+    ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "none"}
+    groups = {"allergies": [], "dietary_restrictions": [], "other": []}
 
     for item in restrictions:
         key = item.strip().lower()
-        if not key or key == "none":
+        if not key or key in ignored_keys:
             continue
         if key in KNOWN_ALLERGENS:
             groups["allergies"].append(key)
         elif key in KNOWN_DIETARY:
-            groups["restrictions"].append(key)
+            groups["dietary_restrictions"].append(key)
         else:
             groups["other"].append(key)
  
