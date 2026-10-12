@@ -337,3 +337,144 @@ def test_flags_are_reset_on_each_call():
     result = lm.validate_and_process_logic(data, [])
 
     assert result["flags"] == []
+
+
+# --------------------------------------------------
+# validate_and_process_logic(): risk rules
+# --------------------------------------------------
+
+def test_allergy_conflict_raises_score_to_high():
+    data = make_data(
+        risk_score=10,
+        allergy_conflicts=["Peanut"],
+    )
+
+    result = lm.validate_and_process_logic(data, ["peanut"])
+
+    assert result["risk_score"] >= 60
+    assert result["risk_level"] == "High"
+    assert result["is_safe"] is False
+    assert any(
+        "conflict or non-compliant status" in flag
+        for flag in result["flags"]
+    )
+
+
+def test_non_compliant_status_raises_score_to_high():
+    data = make_data(
+        risk_score=5,
+        dietary_status={"Vegetarian": "NON-COMPLIANT"},
+    )
+
+    result = lm.validate_and_process_logic(data, ["vegetarian"])
+
+    assert result["risk_score"] >= 60
+    assert result["risk_level"] == "High"
+    assert result["is_safe"] is False
+
+
+def test_uncertain_status_raises_score_to_medium():
+    data = make_data(
+        risk_score=5,
+        dietary_status={"Vegetarian": "UNCERTAIN"},
+    )
+
+    result = lm.validate_and_process_logic(data, ["vegetarian"])
+
+    assert result["risk_score"] >= 30
+    assert result["risk_level"] in ["Medium", "High"]
+    assert result["is_safe"] is False
+
+
+def test_trigger_ingredient_raises_score_to_medium():
+    data = make_data(
+        risk_score=5,
+        ingredient_tree=make_node(
+            "Dish",
+            children=[
+                make_node(
+                    "Peanut",
+                    status="Trigger",
+                    conflict="Peanut allergy",
+                )
+            ],
+        ),
+    )
+
+    result = lm.validate_and_process_logic(data, ["peanut"])
+
+    assert result["risk_score"] >= 30
+    assert result["is_safe"] is False
+    assert any(
+        "ingredient is marked Trigger" in flag
+        for flag in result["flags"]
+    )
+
+
+def test_high_ai_risk_level_cannot_be_lowered():
+    data = make_data(
+        risk_score=5,
+        risk_level="High",
+    )
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result["risk_score"] >= 60
+    assert result["risk_level"] == "High"
+    assert result["is_safe"] is False
+
+
+def test_medium_ai_risk_level_cannot_be_lowered():
+    data = make_data(
+        risk_score=5,
+        risk_level="Medium",
+    )
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result["risk_score"] >= 30
+    assert result["risk_level"] in ["Medium", "High"]
+    assert result["is_safe"] is False
+
+
+def test_unverified_stall_with_cross_contact_raises_score():
+    data = make_data(
+        risk_score=10,
+        stall_knowledge="Unknown",
+        cross_contact_risks=["Shared fryer"],
+    )
+
+    result = lm.validate_and_process_logic(data, ["egg"])
+
+    assert result["risk_score"] >= 30
+    assert result["is_safe"] is False
+    assert any(
+        "unverified stall with cross-contact risks" in flag
+        for flag in result["flags"]
+    )
+
+
+def test_unverified_stall_without_user_restrictions_does_not_apply_rule():
+    data = make_data(
+        risk_score=10,
+        stall_knowledge="Unknown",
+        cross_contact_risks=["Shared fryer"],
+    )
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result["risk_score"] == 10
+    assert result["is_safe"] is True
+
+
+def test_cross_contact_rule_requires_ai_score_at_least_10():
+    data = make_data(
+        risk_score=9,
+        stall_knowledge="Unknown",
+        cross_contact_risks=["Shared fryer"],
+    )
+
+    result = lm.validate_and_process_logic(data, ["egg"])
+
+    assert result["risk_score"] == 9
+    assert result["is_safe"] is True
