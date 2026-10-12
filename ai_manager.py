@@ -2,10 +2,13 @@
 import json
 import time
 import os
+import logging
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv 
-# TO ADD PRINT FUNCTIONS FROM io_manager.py
+from io_manager import display_api_key_error, display_attempt_error
+
+logging.basicConfig(filename="api.logs", filemode="a",level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # This is so that we do not have to keep putting our own API key into the terminal
 load_dotenv()                  
@@ -183,8 +186,8 @@ def restrictions_to_text(restrictions):
 def query_ai_safety_auditor(stall, dish, restrictions):
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
-          # Will need to create function in io_manager.py to print the below statement as per the hard constraints
-         print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
+         logging.error("GEMINI_API_KEY is not set")
+         display_api_key_error()
          return None
 
     client = genai.Client(api_key=api_key)
@@ -227,8 +230,8 @@ def query_ai_safety_auditor(stall, dish, restrictions):
             data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
             return data
         except Exception as error:
-            # Will need to create function in io_manager.py to print the below statement as per the hard constraints
-            print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
+            logging.error(f"Attempt {attempt}/{max_tries}:API call has failed: {error} ")
+            display_attempt_error(attempt, max_tries, error)
             if attempt < max_tries:
                 time.sleep(2 * attempt)   # wait 2s after the 1st failure, 4s after the 2nd
             
