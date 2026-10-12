@@ -478,3 +478,58 @@ def test_cross_contact_rule_requires_ai_score_at_least_10():
 
     assert result["risk_score"] == 9
     assert result["is_safe"] is True
+
+# --------------------------------------------------
+# Certification rules
+# --------------------------------------------------
+
+@pytest.mark.parametrize("requirement", ["Halal", "Kosher"])
+def test_compliant_certification_becomes_uncertain(requirement):
+    data = make_data(
+        dietary_status={requirement: "COMPLIANT"},
+    )
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result["dietary_status"][requirement] == "UNCERTAIN"
+    assert result["risk_score"] >= 30
+    assert any(
+        "cannot verify a certification" in flag
+        for flag in result["flags"]
+    )
+
+
+@pytest.mark.parametrize("requirement", ["halal", "kosher"])
+def test_missing_user_certification_is_added_as_uncertain(requirement):
+    data = make_data(dietary_status={})
+
+    result = lm.validate_and_process_logic(data, [requirement])
+
+    assert result["dietary_status"][requirement.title()] == "UNCERTAIN"
+    assert result["risk_score"] >= 30
+    assert any(
+        "was not assessed by the AI" in flag
+        for flag in result["flags"]
+    )
+
+
+def test_already_assessed_certification_is_not_added_twice():
+    data = make_data(
+        dietary_status={"Halal food": "UNCERTAIN"},
+    )
+
+    result = lm.validate_and_process_logic(data, ["halal"])
+
+    assert "Halal" not in result["dietary_status"]
+    assert "Halal food" in result["dietary_status"]
+
+
+def test_non_compliant_certification_stays_non_compliant():
+    data = make_data(
+        dietary_status={"Halal": "NON-COMPLIANT"},
+    )
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result["dietary_status"]["Halal"] == "NON-COMPLIANT"
+    assert result["risk_score"] >= 60
