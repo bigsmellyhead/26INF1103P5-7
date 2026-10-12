@@ -184,3 +184,89 @@ def test_remove_repeated_children_handles_missing_children():
     # Leaf nodes without a children key should be allowed.
     assert lm.remove_repeated_children(tree) is None
     assert "children" not in tree
+
+    
+# --------------------------------------------------
+# collect_triggers()
+# --------------------------------------------------
+
+def test_collect_triggers_finds_trigger_leaf():
+    leaf = make_node(
+        "Peanut",
+        status="Trigger",
+        conflict="Peanut allergy",
+    )
+    found = []
+
+    result = lm.collect_triggers(leaf, found, [])
+
+    assert result == [leaf]
+
+
+def test_collect_triggers_adds_missing_reason():
+    leaf = make_node(
+        "Unknown ingredient",
+        status="Trigger",
+        conflict=None,
+    )
+    flags = []
+
+    found = lm.collect_triggers(leaf, [], flags)
+
+    assert leaf in found
+    assert leaf["conflict"] == "Flagged by the AI (no detail given)"
+    assert any(
+        "marked Trigger without a reason" in flag
+        for flag in flags
+    )
+
+
+def test_collect_triggers_propagates_trigger_to_parent():
+    parent = make_node(
+        "Sauce",
+        status="Safe",
+        children=[
+            make_node(
+                "Peanut",
+                status="Trigger",
+                conflict="Peanut allergy",
+            )
+        ],
+    )
+
+    found = lm.collect_triggers(parent, [], [])
+
+    assert parent["status"] == "Trigger"
+    assert any(node["name"] == "Peanut" for node in found)
+    assert any(node["name"] == "Sauce" for node in found)
+
+
+def test_collect_triggers_does_not_replace_parent_conflict():
+    parent = make_node(
+        "Sauce",
+        status="Safe",
+        conflict="Existing conflict",
+        children=[
+            make_node(
+                "Peanut",
+                status="Trigger",
+                conflict="Peanut allergy",
+            )
+        ],
+    )
+
+    lm.collect_triggers(parent, [], [])
+
+    assert parent["status"] == "Trigger"
+    assert parent["conflict"] == "Existing conflict"
+
+
+def test_collect_triggers_does_not_duplicate_missing_reason_flag():
+    leaf = make_node("Peanut", status="Trigger", conflict=None)
+    flags = []
+
+    lm.collect_triggers(leaf, [], flags)
+    lm.collect_triggers(leaf, [], flags)
+
+    assert len(flags) == 1
+    assert flags == ["'Peanut' was marked Trigger without a reason."]
