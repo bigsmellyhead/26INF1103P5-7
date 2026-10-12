@@ -830,3 +830,31 @@ def test_none_response_text_retried(monkeypatch):
     assert result is not None
     assert client.models.generate_content.call_count == 2
 
+# =========================================================
+# 11. KNOWN LIMITATIONS OF THE CURRENT VALIDATOR
+# =========================================================
+
+def test_boolean_currently_passes_integer_check():
+    # Known limitation: bool is a subclass of int in Python.
+    assert isinstance(True, int)
+    assert am.check_schema(True, {"type": "INTEGER"}) == []
+
+
+def test_string_length_constraint_currently_ignored():
+    # Current check_schema() does not implement maxLength.
+    assert am.check_schema("too long", {
+        "type": "STRING", "maxLength": 3
+    }) == []
+
+
+def test_additional_properties_constraint_currently_ignored():
+    # Current check_schema() ignores additionalProperties.
+    assert am.check_schema({
+        "name": "Dish",
+        "unexpected": True,
+    }, {
+        "type": "OBJECT",
+        "properties": {"name": {"type": "STRING"}},
+        "required": ["name"],
+        "additionalProperties": False,
+    }) == []
