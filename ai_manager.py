@@ -180,8 +180,6 @@ ai_prompt = """
     """
 
 
-
-
 def restrictions_to_groups(restrictions):
     """Returns the allergies, dietary and other groups as comma-separated text ("none" if empty)."""
     allergies = ", ".join(restrictions.get("allergies", [])) or "none"
