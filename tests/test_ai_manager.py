@@ -241,3 +241,68 @@ def test_enum_and_range_both_checked():
     assert any("not allowed" in p for p in problems)
     assert any("too big" in p for p in problems)
 
+# =========================================================
+# 4. check_schema(): ARRAYS
+# =========================================================
+
+def test_valid_array():
+    assert am.check_schema(["Egg", "Milk"], {
+        "type": "ARRAY",
+        "items": {"type": "STRING"},
+    }) == []
+
+
+def test_empty_array():
+    assert am.check_schema([], {
+        "type": "ARRAY",
+        "items": {"type": "STRING"},
+    }) == []
+
+
+def test_invalid_array_item():
+    problems = am.check_schema(["Egg", 123], {
+        "type": "ARRAY",
+        "items": {"type": "STRING"},
+    })
+
+    assert any("wrong type" in p for p in problems)
+
+
+def test_array_exceeds_max_items():
+    problems = am.check_schema(["A", "B", "C", "D"], {
+        "type": "ARRAY",
+        "items": {"type": "STRING"},
+        "maxItems": 3,
+    })
+
+    assert any("too many items" in p for p in problems)
+
+
+def test_array_at_max_items():
+    assert am.check_schema(["A", "B", "C"], {
+        "type": "ARRAY",
+        "items": {"type": "STRING"},
+        "maxItems": 3,
+    }) == []
+
+
+def test_nested_array_invalid_item():
+    problems = am.check_schema([[1, 2], [3, "bad"]], {
+        "type": "ARRAY",
+        "items": {
+            "type": "ARRAY",
+            "items": {"type": "INTEGER"},
+        },
+    })
+
+    assert problems
+
+def test_array_schema_missing_items_raises_error():
+    schema = {
+        "type": "ARRAY",
+        "maxItems": 5,
+    }
+
+    with pytest.raises(KeyError):
+        am.check_schema([1, 2, 3], schema)
+
