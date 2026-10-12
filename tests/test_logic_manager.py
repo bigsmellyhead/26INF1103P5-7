@@ -185,7 +185,7 @@ def test_remove_repeated_children_handles_missing_children():
     assert lm.remove_repeated_children(tree) is None
     assert "children" not in tree
 
-    
+
 # --------------------------------------------------
 # collect_triggers()
 # --------------------------------------------------
@@ -270,3 +270,35 @@ def test_collect_triggers_does_not_duplicate_missing_reason_flag():
 
     assert len(flags) == 1
     assert flags == ["'Peanut' was marked Trigger without a reason."]
+
+# --------------------------------------------------
+# raise_score()
+# --------------------------------------------------
+
+def test_raise_score_raises_low_score():
+    data = {"risk_score": 10, "flags": []}
+
+    lm.raise_score(data, 30, "test reason")
+
+    assert data["risk_score"] == 30
+    assert len(data["flags"]) == 1
+    assert "test reason" in data["flags"][0]
+
+
+def test_raise_score_does_not_lower_score():
+    data = {"risk_score": 50, "flags": []}
+
+    lm.raise_score(data, 30, "test reason")
+
+    assert data["risk_score"] == 50
+    assert data["flags"] == []
+
+
+def test_raise_score_at_exact_minimum():
+    data = {"risk_score": 30, "flags": []}
+
+    lm.raise_score(data, 30, "test reason")
+
+    assert data["risk_score"] == 30
+    assert data["flags"] == []
+
