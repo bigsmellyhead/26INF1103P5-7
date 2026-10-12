@@ -556,3 +556,89 @@ def test_missing_key_does_not_create_client(monkeypatch):
 
     client_constructor.assert_not_called()
 
+# =========================================================
+# 8. query_ai_safety_auditor(): SUCCESS
+# =========================================================
+
+def test_successful_response(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(monkeypatch)
+
+    result = am.query_ai_safety_auditor(
+        "Stall", "Chicken Rice", {
+            "allergies": ["Peanuts"],
+            "dietary_restrictions": ["Vegan"],
+            "other": [],
+        }
+    )
+
+    assert result["risk_score"] == 10
+    assert result["ingredient_tree"]["name"] == "Chicken Rice"
+    client.models.generate_content.assert_called_once()
+
+
+def test_dietary_status_converted_to_dictionary(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    mock_gemini(monkeypatch)
+
+    result = am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    assert result["dietary_status"] == {"Vegan": "COMPLIANT"}
+
+
+def test_empty_restrictions_sent_as_none(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(monkeypatch)
+
+    am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    contents = client.models.generate_content.call_args.kwargs["contents"]
+
+    assert "<allergies>none</allergies>" in contents
+    assert "<dietary>none</dietary>" in contents
+    assert "<other>none</other>" in contents
+
+
+def test_all_restriction_groups_sent(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(monkeypatch)
+
+    am.query_ai_safety_auditor("Stall", "Dish", {
+        "allergies": ["Egg", "Milk"],
+        "dietary_restrictions": ["Halal"],
+        "other": ["G6PD"],
+    })
+
+    contents = client.models.generate_content.call_args.kwargs["contents"]
+
+    assert "<allergies>Egg, Milk</allergies>" in contents
+    assert "<dietary>Halal</dietary>" in contents
+    assert "<other>G6PD</other>" in contents
+
+
+def test_model_name_and_prompt_passed(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(monkeypatch)
+
+    am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    kwargs = client.models.generate_content.call_args.kwargs
+
+    assert kwargs["model"] == am.model_name
+    assert kwargs["config"].system_instruction == am.ai_prompt
+    assert kwargs["config"].response_schema == am.ai_output_schema
+
+
+def test_generation_settings(monkeypatch):
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    client = mock_gemini(monkeypatch)
+
+    am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    config = client.models.generate_content.call_args.kwargs["config"]
+
+    assert config.response_mime_type == "application/json"
+    assert config.temperature == 0
+    assert config.top_k == 1
+    assert config.seed == 42
+
