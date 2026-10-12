@@ -124,3 +124,31 @@ def test_load_database_creates_file_if_missing(temp_database):
     assert temp_database.exists()
 
 
+# -------------------------
+# save_database()
+# -------------------------
+
+def test_save_database_writes_json(temp_database):
+    data = {
+        "users": {"sam": {"username": "Sam", "restrictions": ["kosher"]}},
+        "audit_logs": []
+    }
+
+    dm.save_database(data)
+
+    with open(temp_database, "r") as file:
+        saved_data = json.load(file)
+
+    assert saved_data == data
+
+
+def test_save_database_overwrites_old_contents(temp_database):
+    temp_database.write_text('{"old": true}')
+
+    new_data = {"users": {}, "audit_logs": []}
+    dm.save_database(new_data)
+
+    with open(temp_database, "r") as file:
+        saved_data = json.load(file)
+
+    assert saved_data == new_data
