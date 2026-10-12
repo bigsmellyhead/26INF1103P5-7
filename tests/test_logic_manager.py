@@ -302,3 +302,38 @@ def test_raise_score_at_exact_minimum():
     assert data["risk_score"] == 30
     assert data["flags"] == []
 
+# --------------------------------------------------
+# validate_and_process_logic(): score boundaries
+# --------------------------------------------------
+
+@pytest.mark.parametrize(
+    "score, expected_score, expected_level, expected_safe",
+    [
+        (-20, 0, "Low", True),
+        (0, 0, "Low", True),
+        (29, 29, "Low", True),
+        (30, 30, "Medium", False),
+        (59, 59, "Medium", False),
+        (60, 60, "High", False),
+        (100, 100, "High", False),
+        (150, 100, "High", False),
+    ],
+)
+def test_score_boundaries(
+    score, expected_score, expected_level, expected_safe
+):
+    data = make_data(risk_score=score)
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result["risk_score"] == expected_score
+    assert result["risk_level"] == expected_level
+    assert result["is_safe"] is expected_safe
+
+
+def test_flags_are_reset_on_each_call():
+    data = make_data(flags=["Old flag"])
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result["flags"] == []
