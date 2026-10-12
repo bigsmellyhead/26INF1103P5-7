@@ -284,3 +284,70 @@ def test_print_cross_contact_risks_missing_key(capsys):
         capsys.readouterr().out
     )
 
+# --------------------------------------------------
+# has_triggered_descendant()
+# --------------------------------------------------
+
+def test_has_triggered_descendant_direct_conflict():
+    node = {
+        "name": "Peanut sauce",
+        "status": "Trigger",
+        "conflict": "Peanut allergy",
+        "children": [],
+    }
+
+    assert io.has_triggered_descendant(node) is True
+
+
+def test_has_triggered_descendant_nested_conflict():
+    node = {
+        "name": "Dish",
+        "children": [
+            {
+                "name": "Sauce",
+                "status": "Safe",
+                "conflict": None,
+                "children": [
+                    {
+                        "name": "Peanut",
+                        "status": "Trigger",
+                        "conflict": "Peanut allergy",
+                        "children": [],
+                    }
+                ],
+            }
+        ],
+    }
+
+    assert io.has_triggered_descendant(node) is True
+
+
+def test_has_triggered_descendant_no_conflict():
+    node = {
+        "name": "Dish",
+        "status": "Safe",
+        "conflict": None,
+        "children": [
+            {
+                "name": "Rice",
+                "status": "Safe",
+                "conflict": None,
+                "children": [],
+            }
+        ],
+    }
+
+    assert io.has_triggered_descendant(node) is False
+
+
+def test_has_triggered_descendant_trigger_without_conflict():
+    node = {
+        "name": "Dish",
+        "status": "Trigger",
+        "conflict": None,
+        "children": [],
+    }
+
+    # A Trigger status alone is not enough for this function.
+    assert io.has_triggered_descendant(node) is False
+
