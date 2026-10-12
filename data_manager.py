@@ -12,7 +12,11 @@ def initialize_database():
         try:
             with open(DB_FILE, "r") as file:
                 data = json.load(file)
-                if not isinstance(data, dict) or "users" not in data or "audit_logs" not in data:
+                if (not isinstance(data, dict) or 
+                "users" not in data or 
+                "audit_logs" not in data or 
+                not isinstance(data["users"], dict) or 
+                not isinstance(data["audit_logs"], list)):
                     create_default_db()
         except (json.JSONDecodeError, ValueError):
             create_default_db()
