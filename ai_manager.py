@@ -8,8 +8,8 @@ from google.genai import types
 from dotenv import load_dotenv 
 from io_manager import display_api_key_error, display_attempt_error
 
-#configue logging to save logs to api.logs, filemode 'a' to allow appending of new logs
-#Only ERROR level are logged,in the format of date/time, level, message...
+# Configue logging to save logs to api.logs, filemode 'a' to allow appending of new logs
+# ERROR level are logged,in the format of date/time, level, message...
 logging.basicConfig(filename="api.logs", filemode="a",level=logging.ERROR, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # This is so that we do not have to keep putting our own API key into the terminal
@@ -23,8 +23,7 @@ conflict_description = "Max 6 words, the reason only. Do not repeat the ingredie
 insight_description = "Max 12 words, only if this stall's practice changes this component's risk. Null otherwise. Always null on the dish node."
 
 
-# This schema node should enforce the last level of the output tree which shows the ingridients used in each component of the dish
-#This is the end of the tree thus it has no 'children' key
+# Enforces the final level of the output tree, detailing individual ingredients used within each component
 leaf_node_schema = {
     "type": "OBJECT",
     "properties": {
@@ -74,7 +73,7 @@ ingredient_tree_schema = {
     "required": ["name", "status", "conflict", "stall_insight", "children"],
 }
 
-#Enforces the reply to be JSON with every key in the "required" list, using the types listed in the dictionary.(etc string,boolean,integers and enum values depending on what is specified, such as low,medium,high)
+# Enforces the reply to be JSON with every key in the "required" list, using the types listed in the dictionary.(etc string,boolean,integers and enum values depending on what is specified, such as low,medium,high)
 ai_output_schema = {
     "type": "OBJECT",
     "properties": {
@@ -104,7 +103,7 @@ ai_output_schema = {
             },
         },
         "allergy_conflicts": {"type": "ARRAY", "items": {"type": "STRING"}},
-        #defines the dish itself from a seperate dictionary
+        # Defines the dish itself from a seperate dictionary
         "ingredient_tree": ingredient_tree_schema,
     },
     #These keys must be included in the API reply
@@ -123,6 +122,7 @@ ai_output_schema = {
     ],
 }
 
+# System instructions shaping the AI's expert hawker-centre food safety reasoning and output constraints
 ai_prompt = """
     You are an expert food safety and dietary restriction auditor for Singapore hawker centres.
     Your value is STALL-LEVEL reasoning; the same dish can be safe at one stall and unsafe at another.
@@ -180,8 +180,7 @@ ai_prompt = """
     """
 
 
-
-
+# Returns the allergies, dietary and other groups as comma-separated text ("none" if empty)
 def restrictions_to_groups(restrictions):
     """Returns the allergies, dietary and other groups as comma-separated text ("none" if empty)."""
     allergies = ", ".join(restrictions.get("allergies", [])) or "none"
@@ -190,7 +189,7 @@ def restrictions_to_groups(restrictions):
     return allergies, dietary, other
 
 
-# assign schema values such as "string" to python equivalent (str)
+# Assign schema values such as "string" to python equivalent (str)
 PYTHON_TYPES = {
     "STRING": str,
     "INTEGER": int,
@@ -199,7 +198,7 @@ PYTHON_TYPES = {
     "OBJECT": dict,
 }
 
-#validates API reply agianst schema rule
+# Validates API reply agianst schema rule
 def check_schema(value, schema, where="reply"):
     #any mismatch will be stored in this problem list, if the list is empty it means there is no mismatch
     problems = []
@@ -257,14 +256,14 @@ def query_ai_safety_auditor(stall, dish, restrictions):
 
     allergies, dietary, other = restrictions_to_groups(restrictions)
 
-    # Strip angle brackets so user input can't close our tags early
+    # Strip angle brackets so user input can't close our tags early and break out of XML boundary
     stall = stall.replace("<", "").replace(">", "")
     dish = dish.replace("<", "").replace(">", "")
     allergies = allergies.replace("<", "").replace(">", "")
     dietary = dietary.replace("<", "").replace(">", "")
     other = other.replace("<", "").replace(">", "")
 
-    # Only the user's input goes here, wrapped in tags so the model treats it as data
+    # raps sanitized user inputs inside structured XML tags so the model treats them strictly as data
     user_data = f"""
     <stall>{stall}</stall>
     <dish>{dish}</dish>
@@ -274,6 +273,7 @@ def query_ai_safety_auditor(stall, dish, restrictions):
         <other>{other}</other>
     </restrictions>
     """
+
     for attempt in range(1, max_tries + 1):
         try:
             response = client.models.generate_content(
@@ -290,12 +290,12 @@ def query_ai_safety_auditor(stall, dish, restrictions):
             )
             data = json.loads(response.text)
 
-            # Validate the whole reply against the schema (a failure here is retried by the loop)
+            # Validates the parsed JSON against the strict output schema; triggers retry on failure
             problems = check_schema(data, ai_output_schema)
             if problems:
                 raise ValueError(f"Malformed response: {problems}")
                 
-            # Gemini needs a list here, so turn it back into {"Halal": "COMPLIANT", ...}
+            # Transforms dietary status from a list-of-objects back into a dictionary map for the logic manager
             data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
             return data
         except Exception as error:
