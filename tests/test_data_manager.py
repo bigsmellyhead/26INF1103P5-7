@@ -224,3 +224,60 @@ def test_save_user_profile_preserves_other_users(temp_database):
 
     assert db["users"]["alex"]["restrictions"] == ["kosher"]
     assert db["users"]["sam"]["restrictions"] == ["vegan"]
+
+
+# -------------------------
+# append_audit_log()
+# -------------------------
+
+def test_append_audit_log_adds_record(temp_database):
+    record = {"dish": "Chicken Rice", "risk_score": 20}
+
+    dm.append_audit_log(record)
+
+    db = dm.load_database()
+
+    assert db["audit_logs"] == [record]
+
+
+def test_append_audit_log_preserves_existing_records(temp_database):
+    first = {"dish": "Salad", "risk_score": 0}
+    second = {"dish": "Noodles", "risk_score": 30}
+
+    dm.append_audit_log(first)
+    dm.append_audit_log(second)
+
+    db = dm.load_database()
+
+    assert db["audit_logs"] == [first, second]
+
+
+def test_append_audit_log_preserves_users(temp_database):
+    dm.save_user_profile("Alex", ["halal"])
+    dm.append_audit_log({"dish": "Soup"})
+
+    db = dm.load_database()
+
+    assert "alex" in db["users"]
+    assert db["audit_logs"] == [{"dish": "Soup"}]
+
+
+def test_append_audit_log_accepts_empty_dictionary(temp_database):
+    dm.append_audit_log({})
+
+    db = dm.load_database()
+
+    assert db["audit_logs"] == [{}]
+
+
+def test_append_audit_log_accepts_multiple_records(temp_database):
+    records = [
+        {"dish": "Dish A"},
+        {"dish": "Dish B"},
+        {"dish": "Dish C"},
+    ]
+
+    for record in records:
+        dm.append_audit_log(record)
+
+    assert dm.load_database()["audit_logs"] == records
