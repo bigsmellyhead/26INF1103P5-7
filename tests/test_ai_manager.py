@@ -306,3 +306,104 @@ def test_array_schema_missing_items_raises_error():
     with pytest.raises(KeyError):
         am.check_schema([1, 2, 3], schema)
 
+# =========================================================
+# 5. check_schema(): OBJECTS
+# =========================================================
+
+def test_valid_object():
+    schema = {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING"},
+            "score": {"type": "INTEGER"},
+        },
+        "required": ["name", "score"],
+    }
+
+    assert am.check_schema(
+        {"name": "Dish", "score": 50}, schema
+    ) == []
+
+
+def test_missing_required_key():
+    problems = am.check_schema({
+        "name": "Dish"
+    }, {
+        "type": "OBJECT",
+        "properties": {
+            "name": {"type": "STRING"},
+            "score": {"type": "INTEGER"},
+        },
+        "required": ["name", "score"],
+    })
+
+    assert any("missing 'score'" in p for p in problems)
+
+
+def test_multiple_missing_keys():
+    problems = am.check_schema({}, {
+        "type": "OBJECT",
+        "properties": {
+            "a": {"type": "STRING"},
+            "b": {"type": "STRING"},
+        },
+        "required": ["a", "b"],
+    })
+
+    assert any("missing 'a'" in p for p in problems)
+    assert any("missing 'b'" in p for p in problems)
+
+
+def test_invalid_nested_property():
+    problems = am.check_schema({"name": 123}, {
+        "type": "OBJECT",
+        "properties": {"name": {"type": "STRING"}},
+        "required": ["name"],
+    })
+
+    assert any("wrong type" in p for p in problems)
+
+
+def test_nested_object_invalid_enum():
+    problems = am.check_schema({
+        "items": [{"status": "Unknown"}]
+    }, {
+        "type": "OBJECT",
+        "properties": {
+            "items": {
+                "type": "ARRAY",
+                "items": {
+                    "type": "OBJECT",
+                    "properties": {
+                        "status": {
+                            "type": "STRING",
+                            "enum": ["Safe", "Trigger"],
+                        }
+                    },
+                    "required": ["status"],
+                },
+            }
+        },
+        "required": ["items"],
+    })
+
+    assert any("not allowed" in p for p in problems)
+
+
+def test_unexpected_object_keys_currently_accepted():
+    # Documents a limitation in the current validator.
+    assert am.check_schema({
+        "name": "Dish", "unexpected": True
+    }, {
+        "type": "OBJECT",
+        "properties": {"name": {"type": "STRING"}},
+        "required": ["name"],
+    }) == []
+
+
+def test_object_schema_missing_properties_raises_error():
+    with pytest.raises(KeyError):
+        am.check_schema({}, {
+            "type": "OBJECT", "required": []
+        })
+
