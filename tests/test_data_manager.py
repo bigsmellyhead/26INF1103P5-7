@@ -178,3 +178,49 @@ def test_get_user_profile_returns_none_for_unknown_user(temp_database):
     result = dm.get_user_profile("unknown")
 
     assert result is None
+
+# -------------------------
+# save_user_profile()
+# -------------------------
+
+def test_save_user_profile_creates_user(temp_database):
+    dm.save_user_profile("Alex", ["halal", "dairy-free"])
+
+    with open(temp_database, "r") as file:
+        data = json.load(file)
+
+    assert data["users"]["alex"] == {
+        "username": "Alex",
+        "restrictions": ["halal", "dairy-free"]
+    }
+
+
+def test_save_user_profile_updates_existing_user(temp_database):
+    dm.save_user_profile("Alex", ["halal"])
+    dm.save_user_profile("ALEX", ["vegan"])
+
+    profile = dm.get_user_profile("alex")
+
+    assert profile["username"] == "ALEX"
+    assert profile["restrictions"] == ["vegan"]
+
+
+def test_save_user_profile_preserves_audit_logs(temp_database):
+    dm.append_audit_log({"dish": "Noodles"})
+    dm.save_user_profile("Alex", ["vegan"])
+
+    db = dm.load_database()
+
+    assert db["audit_logs"] == [{"dish": "Noodles"}]
+    assert "alex" in db["users"]
+
+
+def test_save_user_profile_preserves_other_users(temp_database):
+    dm.save_user_profile("Alex", ["halal"])
+    dm.save_user_profile("Sam", ["vegan"])
+    dm.save_user_profile("Alex", ["kosher"])
+
+    db = dm.load_database()
+
+    assert db["users"]["alex"]["restrictions"] == ["kosher"]
+    assert db["users"]["sam"]["restrictions"] == ["vegan"]
