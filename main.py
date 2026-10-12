@@ -21,10 +21,14 @@ def main():
             print("\nProcessing audit with temporary local reasoning engine...")
 
              # Query LLM API
-            raw_ai_output = query_ai_safety_auditor(stall, dish, restrictions)
+            ai_output = query_ai_safety_auditor(stall, dish, restrictions)
+
+            # The AI manager returns None after all its tries fail
+            if ai_output is None:
+                raise ValueError("The AI could not complete this audit after several tries.")
 
             # Validate schema and enforce rules
-            processed_data = validate_and_process_logic(raw_ai_output)
+            processed_data = validate_and_process_logic(ai_output, restrictions)
 
             # Form final log entry
             final_record = {

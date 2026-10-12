@@ -16,7 +16,7 @@ logging.basicConfig(filename="api.logs", filemode="a",level=logging.ERROR, forma
 load_dotenv()                  
 
 # Stored here for easier model version change 
-model_name = "gemini-3.5-flash-lit"
+model_name = "gemini-3.5-flash-lite"
 max_tries = 3
 
 conflict_description = "Max 6 words, the reason only. Do not repeat the ingredient name. Null on Safe nodes and on parents that are Trigger only because of a child."
@@ -84,7 +84,8 @@ ai_output_schema = {
         "risk_score": {"type": "INTEGER", "minimum": 0, "maximum": 100},
         "stall_specific_insights": {"type": "STRING"},
         "reasoning": {"type": "STRING"},
-        "cross_contact_risks": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "hidden_ingredients": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "cross_contact_risks": {"type": "ARRAY", "items": {"type": "STRING"},"maxItems": 3},
         "dietary_status": {
             "type": "ARRAY",
             "items": {
@@ -114,6 +115,7 @@ ai_output_schema = {
         "risk_score",
         "stall_specific_insights",
         "reasoning",
+        "hidden_ingredients",
         "cross_contact_risks",
         "dietary_status",
         "allergy_conflicts",
@@ -178,6 +180,8 @@ ai_prompt = """
     """
 
 
+
+
 def restrictions_to_groups(restrictions):
     """Returns the allergies, dietary and other groups as comma-separated text ("none" if empty)."""
     allergies = ", ".join(restrictions.get("allergies", [])) or "none"
@@ -185,6 +189,61 @@ def restrictions_to_groups(restrictions):
     other = ", ".join(restrictions.get("other", [])) or "none"
     return allergies, dietary, other
 
+
+# assign schema values such as "string" to python equivalent (str)
+PYTHON_TYPES = {
+    "STRING": str,
+    "INTEGER": int,
+    "BOOLEAN": bool,
+    "ARRAY": list,
+    "OBJECT": dict,
+}
+
+#validates API reply agianst schema rule
+def check_schema(value, schema, where="reply"):
+    #any mismatch will be stored in this problem list, if the list is empty it means there is no mismatch
+    problems = []
+
+    # Check if  value is empty, only allowed if the schema states its "nullable"
+    if value is None:
+        if not schema.get("nullable"):
+            problems.append(f"{where} is empty")
+        return problems
+
+    # Check type
+    if not isinstance(value, PYTHON_TYPES[schema["type"]]):
+        problems.append(f"{where} has the wrong type")
+        return problems
+
+    # Check if there is enum and if the value is what is allowed by enum
+    if "enum" in schema and value not in schema["enum"]:
+        problems.append(f"{where} is not allowed: {value}")
+
+    # Check if number is within range
+    if "minimum" in schema and value < schema["minimum"]:
+        problems.append(f"{where} is too small: {value}")
+    if "maximum" in schema and value > schema["maximum"]:
+        problems.append(f"{where} is too big: {value}")
+
+    # Check if list does not have more items than maxItems allows
+    if schema["type"] == "ARRAY":
+        if "maxItems" in schema and len(value) > schema["maxItems"]:
+            problems.append(f"{where} has too many items")
+        #check every item in list with check_schema function again
+        for item in value:
+            problems += check_schema(item, schema["items"], where + " item")
+
+    # Check if all keys under required exists
+    if schema["type"] == "OBJECT":
+        for key in schema["required"]:
+            if key not in value:
+                problems.append(f"{where} is missing '{key}'")
+        #check each key values with check_schema function again
+        for key in schema["properties"]:
+            if key in value:
+                problems += check_schema(value[key], schema["properties"][key], where + "." + key)
+#returns problems that was picked up 
+    return problems
 
 def query_ai_safety_auditor(stall, dish, restrictions):
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -231,17 +290,17 @@ def query_ai_safety_auditor(stall, dish, restrictions):
             )
             data = json.loads(response.text)
 
-            # Check the schema before using the data (a failure here is retried by the loop)
-            for key in ai_output_schema["required"]:
-                if key not in data:
-                    raise ValueError(f"Missing required key '{key}'")
+            # Validate the whole reply against the schema (a failure here is retried by the loop)
+            problems = check_schema(data, ai_output_schema)
+            if problems:
+                raise ValueError(f"Malformed response: {problems}")
                 
             # Gemini needs a list here, so turn it back into {"Halal": "COMPLIANT", ...}
             data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
             return data
         except Exception as error:
             #error will be logged to api.logs
-            logging.error(f"Attempt {attempt}/{max_tries}:API call has failed: {error} ")
+            logging.error(f"Attempt {attempt}/{max_tries}:API has error: {error} ")
             display_attempt_error(attempt, max_tries, error)
             if attempt < max_tries:
                 time.sleep(2 * attempt)   # wait 2s after the 1st failure, 4s after the 2nd
