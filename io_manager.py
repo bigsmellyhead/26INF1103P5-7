@@ -153,6 +153,16 @@ def print_ingredient_breakdown_tree(result_data):
 @param prefix        - String used for tracking recursive indentation and tree alignment.
 @return None
 """
+
+def has_triggered_descendant(node):
+    """Recursively checks if a node or any of its descendants is a trigger with a conflict or triggered children."""
+    if node.get("conflict") and node.get("status") == "Trigger":
+        return True
+    for child in node.get("children", []):
+        if has_triggered_descendant(child):
+            return True
+    return False
+
 def print_children_tree(starting_node, prefix = ""):
     children = starting_node["children"]
 
@@ -166,8 +176,12 @@ def print_children_tree(starting_node, prefix = ""):
         child_conflict = child["conflict"]
         child_verdict = ""
 
-        if(child_conflict and child_status == "Trigger"):
-            child_verdict = f"{COLOR_RED}<-----[{child_status}: {child_conflict}]{COLOR_RESET}"
+        # Factor in whether the node itself has a conflict or has triggered descendants
+        if child_status == "Trigger" and (child_conflict or has_triggered_descendant(child)):
+            if child_conflict:
+                child_verdict = f"{COLOR_RED}<-----[{child_status}: {child_conflict}]{COLOR_RESET}"
+            else:
+                child_verdict = f"{COLOR_RED}({child_status}){COLOR_RESET}"
         else:
             child_verdict = f"{COLOR_GREEN}({child_status}){COLOR_RESET}"
 
