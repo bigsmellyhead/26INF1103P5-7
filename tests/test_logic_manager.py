@@ -628,3 +628,48 @@ def test_original_tree_is_modified_in_place():
     lm.validate_and_process_logic(data, [])
 
     assert original_tree["status"] == "Trigger"
+
+# --------------------------------------------------
+# Combined conditions
+# --------------------------------------------------
+
+def test_multiple_risks_choose_highest_required_score():
+    data = make_data(
+        risk_score=5,
+        risk_level="Low",
+        allergy_conflicts=["Peanut"],
+        dietary_status={"Vegetarian": "UNCERTAIN"},
+        ingredient_tree=make_node(
+            "Dish",
+            children=[
+                make_node(
+                    "Peanut",
+                    status="Trigger",
+                    conflict="Peanut allergy",
+                )
+            ],
+        ),
+    )
+
+    result = lm.validate_and_process_logic(
+        data,
+        ["peanut", "vegetarian"],
+    )
+
+    assert result["risk_score"] >= 60
+    assert result["risk_level"] == "High"
+    assert result["is_safe"] is False
+
+
+def test_empty_restrictions_and_no_risks_remain_low():
+    data = make_data(
+        risk_score=5,
+        risk_level="Low",
+    )
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result["risk_score"] == 5
+    assert result["risk_level"] == "Low"
+    assert result["is_safe"] is True
+    assert result["flags"] == []
