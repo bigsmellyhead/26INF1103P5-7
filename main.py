@@ -25,7 +25,7 @@ def main():
 
             # The AI manager returns None after all its tries fail
             if ai_output is None:
-                raise ValueError("The AI could not complete this audit after several tries.")
+                raise ValueError("The AI could not complete this audit after several tries or API key is not set properly.")
 
             # Validate schema and enforce rules
             processed_data = validate_and_process_logic(ai_output, restrictions)
