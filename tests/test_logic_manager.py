@@ -533,3 +533,98 @@ def test_non_compliant_certification_stays_non_compliant():
 
     assert result["dietary_status"]["Halal"] == "NON-COMPLIANT"
     assert result["risk_score"] >= 60
+
+
+# --------------------------------------------------
+# Trigger tree consistency and flags
+# --------------------------------------------------
+
+def test_triggered_child_propagates_to_parent_and_adds_flag():
+    data = make_data(
+        risk_score=0,
+        ingredient_tree=make_node(
+            "Dish",
+            children=[
+                make_node(
+                    "Peanut sauce",
+                    status="Trigger",
+                    conflict="Peanut allergy",
+                    children=[],
+                    stall_insight="Prepared using shared equipment",
+                )
+            ],
+        ),
+    )
+
+    result = lm.validate_and_process_logic(data, ["peanut"])
+
+    assert result["ingredient_tree"]["status"] == "Trigger"
+    assert result["risk_score"] >= 30
+    assert any(
+        "Stall practice affects 'Peanut sauce'" in flag
+        for flag in result["flags"]
+    )
+
+
+def test_conflict_without_trigger_adds_warning_flag():
+    data = make_data(
+        allergy_conflicts=["Peanut"],
+    )
+
+    result = lm.validate_and_process_logic(data, ["peanut"])
+
+    assert any(
+        "no ingredient is marked Trigger" in flag
+        for flag in result["flags"]
+    )
+
+
+def test_repeated_child_is_removed_during_processing():
+    data = make_data(
+        ingredient_tree=make_node(
+            "Rice",
+            children=[
+                make_node("Rice", children=[]),
+                make_node("Chicken", children=[]),
+            ],
+        ),
+    )
+
+    result = lm.validate_and_process_logic(data, [])
+
+    child_names = [
+        child["name"]
+        for child in result["ingredient_tree"]["children"]
+    ]
+
+    assert child_names == ["Chicken"]
+
+
+def test_input_dictionary_is_modified_in_place():
+    data = make_data()
+
+    result = lm.validate_and_process_logic(data, [])
+
+    assert result is data
+    assert "flags" in data
+
+
+def test_original_tree_is_modified_in_place():
+    data = make_data(
+        ingredient_tree=make_node(
+            "Dish",
+            children=[
+                make_node(
+                    "Peanut",
+                    status="Trigger",
+                    conflict="Peanut allergy",
+                )
+            ],
+        ),
+    )
+
+    original_tree = data["ingredient_tree"]
+
+    lm.validate_and_process_logic(data, [])
+
+    assert original_tree["status"] == "Trigger"
