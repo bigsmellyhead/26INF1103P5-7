@@ -22,12 +22,17 @@ def main():
             continue
 
         try:
-            print("\nProcessing audit with AI reasoning engine...")
-            # Query LLM API
-            raw_ai_output = query_ai_safety_auditor(stall, dish, restrictions)
+            print("\nProcessing audit with temporary local reasoning engine...")
+
+             # Query LLM API
+            ai_output = query_ai_safety_auditor(stall, dish, restrictions)
+
+            # The AI manager returns None after all its tries fail
+            if ai_output is None:
+                raise ValueError("The AI could not complete this audit after several tries.")
 
             # Validate schema and enforce rules
-            processed_data = validate_and_process_logic(raw_ai_output)
+            processed_data = validate_and_process_logic(ai_output, restrictions)
 
             # Form final log entry
             final_record = {
@@ -42,16 +47,26 @@ def main():
             append_audit_log(final_record)
 
             # Display results
-            display_audit_result(username, stall, dish, restrictions, processed_data)
+            display_audit_result(
+                username,
+                stall,
+                dish,
+                restrictions,
+                processed_data
+            )
 
         except Exception as e:
             print(f"\n[System Error Caught]: {e}")
             print("Please try your audit request again.")
 
-        cont = get_yes_no_input("Would you like to audit another dish? (y/n): ")
-        if cont != 'y':
+        cont = input(
+            "Would you like to audit another dish? (y/n): "
+        ).strip().lower()
+
+        if cont != "y":
             print("Exiting application. Stay safe!")
             break
+
 
 if __name__ == "__main__":
     main()
