@@ -3,4 +3,4 @@ google-genai
 python-dotenv
 requests
 pytest
-pytest-watcher
+pytest-cov
