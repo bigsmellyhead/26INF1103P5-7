@@ -485,3 +485,76 @@ def test_print_ingredient_breakdown_tree_valid(capsys):
     assert "FULL INGREDIENT BREAKDOWN" in output
     assert "Dish: Chicken Rice" in output
     assert "Chicken" in output
+
+# --------------------------------------------------
+# display_audit_result()
+# --------------------------------------------------
+
+def test_display_audit_result_contains_main_sections(capsys):
+    io.display_audit_result(
+        "test_user",
+        "Test Stall",
+        "Chicken Rice",
+        {
+            "allergies": ["egg"],
+            "dietary_restrictions": ["vegetarian"],
+            "others": ["g6pd"],
+        },
+        make_result(),
+    )
+
+    output = capsys.readouterr().out
+
+    assert "DISH SAFETY AUDIT" in output
+    assert "[USERNAME] test_user" in output
+    assert "[DISH] Chicken Rice" in output
+    assert "[LOCATION/STALL] Test Stall" in output
+    assert "STALL STATUS: Known" in output
+    assert "SAFE TO EAT" in output
+    assert "FULL INGREDIENT BREAKDOWN" in output
+    assert "ADVISORY DISCLAIMER" in output
+    assert "Always verify with store owners" in output
+
+
+@pytest.mark.parametrize(
+    "knowledge, expected_emoji",
+    [
+        ("Known", "🟢"),
+        ("Inferred", "🟡"),
+        ("Unknown", "🔴"),
+    ],
+)
+def test_display_audit_result_stall_status(
+    knowledge, expected_emoji, capsys
+):
+    io.display_audit_result(
+        "user",
+        "stall",
+        "dish",
+        {},
+        make_result(stall_knowledge=knowledge),
+    )
+
+    assert expected_emoji in capsys.readouterr().out
+
+
+def test_display_audit_result_displays_conflicts(capsys):
+    io.display_audit_result(
+        "user",
+        "stall",
+        "dish",
+        {},
+        make_result(
+            is_safe=False,
+            risk_level="High",
+            risk_score=95,
+            allergy_conflicts=["Peanut"],
+            cross_contact_risks=["Shared fryer"],
+        ),
+    )
+
+    output = capsys.readouterr().out
+
+    assert "NOT SAFE / AVOID" in output
+    assert "Peanut" in output
+    assert "Shared fryer" in output
