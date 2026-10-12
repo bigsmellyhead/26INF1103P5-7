@@ -527,3 +527,32 @@ def test_missing_top_level_key():
 
     assert any("missing 'risk_score'" in p for p in problems)
 
+# =========================================================
+# 7. query_ai_safety_auditor(): API KEY
+# =========================================================
+
+def test_missing_api_key_returns_none(monkeypatch, caplog):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    display_error = Mock()
+    monkeypatch.setattr(am, "display_api_key_error", display_error)
+
+    with caplog.at_level(logging.ERROR):
+        result = am.query_ai_safety_auditor(
+            "Stall", "Dish", {}
+        )
+
+    assert result is None
+    display_error.assert_called_once()
+    assert "GEMINI_API_KEY is not set" in caplog.text
+
+
+def test_missing_key_does_not_create_client(monkeypatch):
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    client_constructor = Mock()
+    monkeypatch.setattr(am.genai, "Client", client_constructor)
+    monkeypatch.setattr(am, "display_api_key_error", Mock())
+
+    am.query_ai_safety_auditor("Stall", "Dish", {})
+
+    client_constructor.assert_not_called()
+
