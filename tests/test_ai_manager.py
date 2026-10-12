@@ -407,3 +407,123 @@ def test_object_schema_missing_properties_raises_error():
             "type": "OBJECT", "required": []
         })
 
+# =========================================================
+# 6. APPLICATION-SPECIFIC SCHEMAS
+# =========================================================
+
+def test_valid_leaf_node():
+    assert am.check_schema({
+        "name": "Peanuts",
+        "status": "Trigger",
+        "conflict": "Contains nuts",
+        "stall_insight": None,
+    }, am.leaf_node_schema) == []
+
+
+def test_valid_safe_leaf_node():
+    assert am.check_schema({
+        "name": "Rice grains",
+        "status": "Safe",
+        "conflict": None,
+        "stall_insight": None,
+    }, am.leaf_node_schema) == []
+
+
+def test_leaf_missing_key():
+    problems = am.check_schema({
+        "name": "Peanuts",
+        "status": "Trigger",
+        "conflict": "Contains nuts",
+    }, am.leaf_node_schema)
+
+    assert any("stall_insight" in p for p in problems)
+
+
+def test_leaf_invalid_status():
+    problems = am.check_schema({
+        "name": "Peanuts",
+        "status": "Danger",
+        "conflict": "Contains nuts",
+        "stall_insight": None,
+    }, am.leaf_node_schema)
+
+    assert any("not allowed" in p for p in problems)
+
+
+def test_leaf_extra_children_currently_accepted():
+    # Current validator ignores undeclared object properties.
+    assert am.check_schema({
+        "name": "Peanuts",
+        "status": "Trigger",
+        "conflict": "Contains nuts",
+        "stall_insight": None,
+        "children": [],
+    }, am.leaf_node_schema) == []
+
+
+def test_valid_component_node():
+    assert am.check_schema({
+        "name": "Sauce",
+        "status": "Trigger",
+        "conflict": None,
+        "stall_insight": None,
+        "children": [{
+            "name": "Soy sauce",
+            "status": "Trigger",
+            "conflict": "Contains soy",
+            "stall_insight": None,
+        }],
+    }, am.component_node_schema) == []
+
+
+def test_valid_ingredient_tree():
+    assert am.check_schema(
+        valid_reply()["ingredient_tree"],
+        am.ingredient_tree_schema,
+    ) == []
+
+
+def test_valid_complete_output():
+    assert am.check_schema(
+        valid_reply(), am.ai_output_schema
+    ) == []
+
+
+@pytest.mark.parametrize("field,bad_value", [
+    ("stall_knowledge", "Maybe"),
+    ("is_safe", "True"),
+    ("risk_level", "Severe"),
+    ("risk_score", -1),
+    ("risk_score", 101),
+    ("stall_specific_insights", None),
+    ("reasoning", 123),
+    ("hidden_ingredients", "Peanuts"),
+    ("cross_contact_risks", ["A", "B", "C", "D"]),
+    ("allergy_conflicts", "Peanuts"),
+    ("ingredient_tree", []),
+])
+def test_invalid_top_level_fields(field, bad_value):
+    data = valid_reply()
+    data[field] = bad_value
+
+    assert am.check_schema(data, am.ai_output_schema)
+
+
+def test_invalid_dietary_status_enum():
+    data = valid_reply()
+    data["dietary_status"] = [{
+        "requirement": "Vegan",
+        "status": "MAYBE",
+    }]
+
+    assert am.check_schema(data, am.ai_output_schema)
+
+
+def test_missing_top_level_key():
+    data = valid_reply()
+    del data["risk_score"]
+
+    problems = am.check_schema(data, am.ai_output_schema)
+
+    assert any("missing 'risk_score'" in p for p in problems)
+
