@@ -155,7 +155,6 @@ def print_ingredient_breakdown_tree(result_data):
 """
 
 def has_triggered_descendant(node):
-    """Recursively checks if a node or any of its descendants is a trigger with a conflict or triggered children."""
     if node.get("conflict") and node.get("status") == "Trigger":
         return True
     for child in node.get("children", []):
