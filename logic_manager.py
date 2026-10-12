@@ -1,4 +1,5 @@
 # logic_manager.py
+import json
 
 # Takes the AI's already-validated record (schema checks are in ai_manager.py) plus the user's restrictions, applies deterministic business rules and returns the final record.
 # The AI is never the last word on safety: these rules can only RAISE risk, never lower it.
