@@ -7,8 +7,12 @@ from data_manager import initialize_database, append_audit_log
 def main():
     initialize_database()
 
-    # Authenticate or register user profile
+    # Authenticate Admin or register user profile
     username, restrictions = handle_user_authentication()
+    run_admin_profile_search(username)
+    if username == "Admin":
+        print("\nDatabase search concluded. See you next time!")
+        return
 
     while True:
         stall, dish = get_user_inputs()
