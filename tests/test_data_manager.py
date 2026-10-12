@@ -152,3 +152,29 @@ def test_save_database_overwrites_old_contents(temp_database):
         saved_data = json.load(file)
 
     assert saved_data == new_data
+
+# -------------------------
+# get_user_profile()
+# -------------------------
+
+def test_get_user_profile_returns_existing_user(temp_database):
+    dm.save_user_profile("Alex", ["halal"])
+
+    result = dm.get_user_profile("alex")
+
+    assert result == {
+        "username": "Alex",
+        "restrictions": ["halal"]
+    }
+
+
+def test_get_user_profile_is_case_insensitive(temp_database):
+    dm.save_user_profile("AlEx", ["vegan"])
+
+    assert dm.get_user_profile("ALEX")["restrictions"] == ["vegan"]
+
+
+def test_get_user_profile_returns_none_for_unknown_user(temp_database):
+    result = dm.get_user_profile("unknown")
+
+    assert result is None
