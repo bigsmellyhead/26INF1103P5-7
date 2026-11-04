@@ -1,10 +1,17 @@
-from io_manager import handle_user_authentication, get_user_inputs, display_audit_result
+
+from io_manager import (
+    handle_user_authentication,
+    get_user_inputs,
+    display_audit_result
+)
+
 from ai_manager import query_ai_safety_auditor
 from logic_manager import validate_and_process_logic
 from data_manager import initialize_database, append_audit_log
 
 
 def main():
+    # Initialize MySQL database and create missing tables
     initialize_database()
 
     # Authenticate or register user profile
@@ -18,17 +25,23 @@ def main():
             continue
 
         try:
-            print("\nProcessing audit with temporary local reasoning engine...")
+            print("\nProcessing audit with AI reasoning engine...")
 
-             # Query LLM API
-            ai_output = query_ai_safety_auditor(stall, dish, restrictions)
+            # Query LLM API
+            ai_output = query_ai_safety_auditor(
+                stall, dish, restrictions
+            )
 
-            # The AI manager returns None after all its tries fail
             if ai_output is None:
-                raise ValueError("The AI could not complete this audit after several tries or API key is not set properly.")
+                raise ValueError(
+                    "The AI could not complete this audit after several "
+                    "tries or the API key is not configured properly."
+                )
 
             # Validate schema and enforce rules
-            processed_data = validate_and_process_logic(ai_output, restrictions)
+            processed_data = validate_and_process_logic(
+                ai_output, restrictions
+            )
 
             # Form final log entry
             final_record = {
@@ -39,7 +52,7 @@ def main():
                 **processed_data
             }
 
-            # Save to JSON flat file database
+            # Save audit record to MySQL
             append_audit_log(final_record)
 
             # Display results
