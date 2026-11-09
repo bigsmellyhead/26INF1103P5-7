@@ -1,12 +1,5 @@
-# ai_manager.py
-import json
-import time
-import os
-import logging
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv 
-from io_manager import display_api_key_error, display_attempt_error
+# output_schema.py
+
 
 class OutputSchema:
     conflict_description="Max 6 words, the reason only. Do not repeat the ingredient name. Null on Safe nodes and on parents that are Trigger only because of a child."
