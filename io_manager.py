@@ -1,322 +1,310 @@
 # io_manager.py
-
 from getpass import getpass
 
+from sqlalchemy import func, select
+
 from data_manager import get_user_profile, save_user_profile
-from logic_manager import search_user_profiles
-from allergen_catalog import (
-    ALLERGEN_CATALOG,
-    DIETARY_RESTRICTIONS,
-    KNOWN_ITEMS,
-    group_restrictions
-)
+from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS , group_restrictions
+from database.database import SessionLocal
+from database.models import AuditLog, User
 
 DIVIDER = "=" * 100
 SECTION = "-" * 100
-
-# ANSI colour definitions
+# ANSI Colour definitions
 COLOR_RED = "\033[31m"
 COLOR_YELLOW = "\033[33m"
 COLOR_GREEN = "\033[32m"
-COLOR_RESET = "\033[0m"
+COLOR_RESET= "\033[0m"
 
 CUSTOM_PROMPT = (
+    # --- Prompt for anything not in the catalog ---
     "Type your own allergies/restrictions, separated by commas\n"
-    "(e.g. g6pd, blue berries): "
-)
+    "(e.g. g6pd, blue berries): ")
 
+"""!
+@brief   - Prints the structured summary of a user's allergies, dietary restrictions, and other flags.
+@details - Extracts and sequentially prints to stdout from sub-lists from the parameter 'restrictions' in the following order:
+           1. Allergies
+           2. Dietary Restrictions
+           3. Others
+           *Prints 'None' for any empty lists
 
-# ============================================================
-# USER INPUT HELPERS
-# ============================================================
-
-def get_yes_no_input(prompt):
-    """Prompt until the user enters y or n."""
-    while True:
-        choice = input(prompt).strip().lower()
-        if choice in {"y", "n"}:
-            return choice
-        print("Please enter only 'y' or 'n'.")
-
-
-def admin_authentication():
-    """Check the admin password."""
-    return getpass("Enter password: ") == "Admin123"
-
-
-# ============================================================
-# DISPLAY RESTRICTIONS
-# ============================================================
-
+@param restrictions - A dictionary containing lists mapping to the keys "allergies", "dietary_restrictions", and "others".
+@return None
+"""
 def print_user_restrictions(restrictions):
-    """Display allergies, dietary restrictions, and other flags."""
     categories = [
         ("allergies", "Allergies"),
         ("dietary_restrictions", "Dietary Restrictions"),
         ("others", "Others")
     ]
-
     for key, label in categories:
         items = restrictions.get(key, [])
-
         if not items:
             print(f"  • {label}: None")
         else:
             print(f"  • {label}:")
             for item in items:
                 print(f"    - {item}")
-
     print("")
 
+"""!
+@brief   -  Evaluates and prints a colored risk assessment statement alongside safety verdicts.
+@details -  Processes execution fields to dynamically evaluate severity thresholds.
+            It utilizes a Python match-case block to match 'High', 'Medium', or 'Low' text levels to terminal color constants,
+            then prints a final binary safety verdict ('SAFE TO EAT' vs 'NOT SAFE / AVOID') alongside contextual logic reasoning.
 
+@param result_data - A dictionary containing  keys: 'risk_level' (str), 'is_safe' (bool), 'risk_score' (int/float), and 'reasoning' (str).
+@note - Utilizes local ANSI constants (`COLOR_RED`, `COLOR_YELLOW`, `COLOR_GREEN`, `COLOR_RESET`) to output color metrics into the terminal interface.
+@return None
+"""
 def print_risk_assessment(result_data):
-    """Display the risk score, risk level, and safety verdict."""
-    match result_data.get("risk_level"):
-        case "High":
-            current_color = COLOR_RED
-        case "Medium":
-            current_color = COLOR_YELLOW
-        case "Low":
-            current_color = COLOR_GREEN
-        case _:
-            current_color = COLOR_RESET
+    # ANSI Colour definitions
+    CURRENT_COLOR = ""
+    #Analyse Risk Score and assign color codes based on risk score
+    match(result_data.get('risk_level')):
+        case('High'):
+            CURRENT_COLOR = COLOR_RED
+        case("Medium"):
+            CURRENT_COLOR = COLOR_YELLOW
+        case("Low"):
+            CURRENT_COLOR = COLOR_GREEN
 
-    safety_status = (
-        "SAFE TO EAT"
-        if result_data.get("is_safe")
-        else "NOT SAFE / AVOID"
-    )
-
-    print(
-        f"{current_color}Risk Assessment: "
-        f"{result_data.get('risk_score')}% "
-        f"({result_data.get('risk_level')})"
-    )
+    safety_status = "SAFE TO EAT" if result_data.get('is_safe') else "NOT SAFE / AVOID"
+    print(f"{CURRENT_COLOR}Risk Assessment: {result_data.get('risk_score')}% ({result_data.get('risk_level')})")
     print(f"VERDICT: {safety_status}")
-    print("Reasoning:")
-    print(f"{result_data.get('reasoning')}{COLOR_RESET}\n")
+    print(f"Reasoning:")
+    print(f"{result_data.get('reasoning')}\n    {COLOR_RESET}")
 
+"""!
+@brief   - Prints the Allergen Conflicts to stdout
+@details - Extracts and prints detected allergy conflicts from result_data.
+           *Prints 'None' if no conflicts are found, or lists each violation.
 
+@param result_data - Dictionary containing 'allergy_conflicts' key
+@return None
+"""
 def print_allergy_conflicts(result_data):
-    """Display detected allergy conflicts."""
-    conflicts = result_data.get("allergy_conflicts", [])
+    conflicts = result_data.get("allergy_conflicts",[])
 
     if not conflicts:
         print("🚨 DETECTED CONFLICTS: None")
     else:
         print("🚨 DETECTED CONFLICTS:")
         for conflict in conflicts:
-            print(
-                f"• [ALLERGY VIOLATION] {conflict} "
-                "detected in ingredient breakdown."
-            )
+            print(f"• [ALLERGY VIOLATION] {conflict} detected in ingredient breakdown.")
 
+"""!
+@brief   - Prints the Dietary Status to stdout
+@details - Extracts and prints dietary status flags and values from result_data.
+           *Prints 'None' if the status is empty, or lists each key-value pair.
 
+@param result_data - Dictionary containing 'dietary_status' key
+@return None
+"""
 def print_dietary_status(result_data):
-    """Display dietary status."""
-    dietary_status = result_data.get("dietary_status", {})
+    dietary_status = result_data.get("dietary_status",{})
 
     if not dietary_status:
         print("🌿 DIETARY STATUS: None")
     else:
         print("🌿 DIETARY STATUS:")
-        for key, value in dietary_status.items():
+        for key , value in dietary_status.items():
             print(f"• {key}: {value}")
 
+"""!
+@brief   - Prints the Cross-Contamination Risks to stdout
+@details - Extracts and prints cross-contamination risks from result_data.
+           *Prints 'None' if the list is empty, or lists each risk.
 
+@param result_data - Dictionary containing 'cross_contact_risks' key
+@return None
+"""
 def print_cross_contact_risks(result_data):
-    """Display cross-contamination risks."""
-    risks = result_data.get("cross_contact_risks", [])
-
-    if not risks:
-        print("⚠️ Cross-Contamination Risks: None")
+    cross_contact_risks = result_data.get("cross_contact_risks",[])
+    if not cross_contact_risks:
+        print("⚠️  Cross-Contamination Risks: None")
     else:
-        print("⚠️ Cross-Contamination Risks:")
-        for risk in risks:
+        print("⚠️  Cross-Contamination Risks:")
+        for risk in cross_contact_risks:
             print(f"• [ENVIRONMENTAL RISK] {risk}")
 
+"""!
+@brief   - Prints the full ingredient breakdown and traceability tree to stdout
+@details - Checks for valid result data, prints the section header, extracts the root
+           dish name from the 'ingredient_tree', and initiates the recursive
+           child tree printing function.
 
-# ============================================================
-# INGREDIENT TREE
-# ============================================================
-
+@param result_data - Dictionary containing the 'ingredient_tree' key mapping to the root node.
+@return None
+"""
 def print_ingredient_breakdown_tree(result_data):
-    """Display the complete ingredient breakdown tree."""
     if not result_data:
         return
 
-    print(SECTION)
+    print(f"{SECTION}")
     print("🌳 FULL INGREDIENT BREAKDOWN & TRACEABILITY:")
-    print(SECTION)
-
+    print(f"{SECTION}")
     ingredient_list = result_data.get("ingredient_tree")
-
-    if not ingredient_list:
-        print("No ingredient breakdown available.")
-        return
-
-    print(f"Dish: {ingredient_list['name']}")
+    print(f"Dish: {ingredient_list["name"]}")
     print_children_tree(ingredient_list, "")
 
+"""!
+@brief   - Recursively prints the child nodes of an ingredient tree with structural tree lines
+@details - Iterates through the children of a starting node, checks their status and
+           conflict state to apply color formatting, and recursively processes nested
+           sub-children with proper indentation and tree branching symbols (├── and └──).
 
-def print_children_tree(starting_node, prefix=""):
-    """Recursively display ingredient tree nodes."""
-    children = starting_node.get("children", [])
+@param starting_node - Dictionary representing the current node (contains 'name', 'status', 'conflict', and optionally 'children').
+@param prefix        - String used for tracking recursive indentation and tree alignment.
+@return None
+"""
 
+def has_triggered_descendant(node):
+    if node.get("conflict") and node.get("status") == "Trigger":
+        return True
+    for child in node.get("children", []):
+        if has_triggered_descendant(child):
+            return True
+    return False
+
+def print_children_tree(starting_node, prefix = ""):
+    children = starting_node["children"]
+
+    symbol_startTree = "├── "
+    symbol_endTree = "└── "
+    indentation = ""
+    #Loop through the children
     for index, child in enumerate(children):
-        child_name = child.get("name", "Unknown")
-        child_status = child.get("status", "Unknown")
-        child_conflict = child.get("conflict")
-        is_last = index == len(children) - 1
+        child_name = child["name"]
+        child_status = child["status"]
+        child_conflict = child["conflict"]
+        child_verdict = ""
 
-        symbol = "└── " if is_last else "├── "
-        indentation = "    " if is_last else "│   "
-
-        if child_conflict and child_status == "Trigger":
-            verdict = (
-                f"{COLOR_RED}<-----"
-                f"[{child_status}: {child_conflict}]"
-                f"{COLOR_RESET}"
-            )
+        # Factor in whether the node itself has a conflict or has triggered descendants
+        if child_status == "Trigger" and (child_conflict or has_triggered_descendant(child)):
+            if child_conflict:
+                child_verdict = f"{COLOR_RED}<-----[{child_status}: {child_conflict}]{COLOR_RESET}"
+            else:
+                child_verdict = f"{COLOR_RED}({child_status}){COLOR_RESET}"
         else:
-            verdict = (
-                f"{COLOR_GREEN}({child_status}){COLOR_RESET}"
-            )
+            child_verdict = f"{COLOR_GREEN}({child_status}){COLOR_RESET}"
 
-        print(f"{prefix}{symbol}{child_name} {verdict}")
+        if(index == len(children) - 1):
+             print(f"{prefix}{symbol_endTree}{child_name} {child_verdict}")
+             indentation = "    "
+        else:
+             print(f"{prefix}{symbol_startTree}{child_name} {child_verdict}")
+             indentation = "│   "
 
-        stall_insight = child.get("stall_insight")
-        if stall_insight:
-            print(
-                f"{prefix}{indentation}↳ "
-                f"{COLOR_YELLOW}Stall: {stall_insight}"
-                f"{COLOR_RESET}"
-            )
+        # Show the stall-specific note under the ingredient it applies to
+        child_insight = child.get("stall_insight")
+        if child_insight:
+            print(f"{prefix}{indentation}↳ {COLOR_YELLOW}Stall: {child_insight}{COLOR_RESET}")
 
-        if child.get("children"):
-            print_children_tree(
-                child,
-                prefix + indentation
-            )
+        if("children" in child):
+            print_children_tree(child, prefix + indentation)
 
 
-# ============================================================
-# FINAL AUDIT REPORT
-# ============================================================
+"""!
+@brief   - Displays the final processed audit report clearly to the user
+@details - Compiles and prints a comprehensive dish safety audit to stdout.
+           This includes user profile/restrictions, stall details, knowledge status,
+           risk assessment, allergy conflicts, dietary status, cross-contamination
+           risks, and the full ingredient breakdown tree, followed by an advisory disclaimer.
 
-def display_audit_result(
-    username, stall, dish, restrictions, result_data
-):
-    """Display the complete dish safety audit report."""
+@param username    - The name of the user requesting the audit.
+@param stall       - The location or stall name where the dish is served.
+@param dish        - The name of the dish being audited.
+@param restrictions - A dictionary containing the user's dietary restrictions and allergies.
+@param result_data  - A dictionary containing audit results (stall knowledge, insights, conflicts, tree, etc.).
+@return None
+"""
+def display_audit_result(username, stall, dish, restrictions, result_data):
     stall_knowledge = result_data["stall_knowledge"]
+    stall_emoji = "🟢" if stall_knowledge == "Known" else "🟡" if stall_knowledge == "Inferred" else "🔴"
+    """Displays the final processed audit report clearly to the user."""
+    print(f"{DIVIDER}")
+    print("                         DISH SAFETY AUDIT            ")
+    print(f"{DIVIDER}")
 
-    if stall_knowledge == "Known":
-        stall_emoji = "🟢"
-    elif stall_knowledge == "Inferred":
-        stall_emoji = "🟡"
-    else:
-        stall_emoji = "🔴"
-
-    print(DIVIDER)
-    print("                         DISH SAFETY AUDIT")
-    print(DIVIDER)
-
+    # User and Restrictions section
     print(f"[USERNAME] {username}")
-    print("[USER PROFILE & RESTRICTIONS]")
+    print(f"[USER PROFILE & RESTRICTIONS]")
     print_user_restrictions(restrictions)
 
+    # Stall and Insights Section
     print(f"[DISH] {dish}")
     print(f"[LOCATION/STALL] {stall}\n")
-
     print(f"[STALL STATUS: {stall_knowledge} {stall_emoji}]")
-    print("[Stall Insights]")
+    print(f"[Stall Insights]")
     print(f"{result_data.get('stall_specific_insights')}\n")
 
-    print(SECTION)
+    # Risk Assessment Section
+    print(f"{SECTION}")
     print_risk_assessment(result_data)
     print_allergy_conflicts(result_data)
-    print()
+    print("")
     print_dietary_status(result_data)
-    print()
+    print("")
     print_cross_contact_risks(result_data)
-    print()
+    print("")
 
+    # Ingredient Breakdown Section
     print_ingredient_breakdown_tree(result_data)
 
     print(f"\n{DIVIDER}")
-    print("⚠️ ADVISORY DISCLAIMER: This tool is advisory only.")
+    print("⚠️  ADVISORY DISCLAIMER: This tool is advisory only.")
     print("   Always verify with store owners for safety.")
-    print(DIVIDER)
+    print(f"{DIVIDER}")
 
-
-# ============================================================
-# RESTRICTION INPUT AND MENU
-# ============================================================
-
+# Input handling for restrictions
 def parse_restrictions(raw_text):
-    """Split comma-separated restrictions into a clean list."""
-    items = [
-        item.strip().lower()
-        for item in raw_text.split(",")
-        if item.strip()
-    ]
+    # --- Spliting of Allergies / Restrictions by commas "," ---
+    """Split comma-separated input into a clean list. Returns ['none'] if empty."""
+    items = [r.strip().lower() for r in raw_text.split(",") if r.strip()]
     return items if items else ["none"]
 
-
 def parse_number_list(raw_text, max_value):
-    """Parse selected menu numbers, returning None if invalid."""
+    # --- Turns "1, 3 4" into [1, 3, 4]. Returns None if anything is invalid ---
     parts = raw_text.replace(",", " ").split()
-
-    if not parts or not all(part.isdigit() for part in parts):
+    if not parts or not all(p.isdigit() for p in parts):
         return None
-
-    numbers = [int(part) for part in parts]
-
-    if any(number < 1 or number > max_value for number in numbers):
+    numbers = [int(p) for p in parts]
+    if any(n < 1 or n > max_value for n in numbers):
         return None
-
     return numbers
 
-
 def show_category_menu(menu_entries, selected, custom_items):
-    """Display the main category menu."""
+    # --- Level 1: Allergies first, then Restrictions, then Other ---
+    # menu_entries is a list of (group, title, items) tuples
     print(f"\n{SECTION}")
     print(" SELECT YOUR ALLERGIES / RESTRICTIONS")
     print(SECTION)
 
     last_group = None
-
-    for number, (group, title, items) in enumerate(
-        menu_entries, start=1
-    ):
+    for number, (group, title, items) in enumerate(menu_entries, start=1):
+        # Print a group header (ALLERGIES / RESTRICTIONS) whenever the group changes
         if group != last_group:
             print(f"\n  {group.upper()}")
             last_group = group
 
-        ticked = sum(
-            1 for item in items if item.lower() in selected
-        )
-        tag = f" ({ticked} selected)" if ticked else ""
+        ticked = sum(1 for item in items if item.lower() in selected)
+        tag = f"  ({ticked} selected)" if ticked else ""
         print(f"    {number}. {title}{tag}")
 
-    custom_number = len(menu_entries) + 1
-    ticked_custom = sum(
-        1 for item in custom_items if item.lower() in selected
-    )
-    tag = f" ({ticked_custom} selected)" if ticked_custom else ""
-
+    ticked_custom = sum(1 for item in custom_items if item in selected)
+    tag = f"  ({ticked_custom} selected)" if ticked_custom else ""
     print("\n  OTHER")
-    print(f"    {custom_number}. Other (type your own){tag}")
+    print(f"    {len(menu_entries) + 1}. Other (type your own){tag}")
+
     print("\n  Enter a number to open it.")
     print("  D = Done    C = Clear everything")
-    print(
-        f"\nCurrently selected: "
-        f"{', '.join(sorted(selected)) if selected else 'none'}"
-    )
-
+    print(f"\nCurrently selected: {', '.join(sorted(selected)) if selected else 'none'}")
 
 def run_item_menu(title, items, selected, allow_custom=False):
-    """Allow the user to select or deselect items."""
+    # --- Level 2: tick / untick specific allergens inside one category ---
+    # `selected` (a set) and `items` (a list) are edited in place.
     while True:
         print(f"\n{SECTION}")
         print(f" {title}")
@@ -324,17 +312,14 @@ def run_item_menu(title, items, selected, allow_custom=False):
 
         if not items:
             print("  (nothing here yet)")
-
         for number, item in enumerate(items, start=1):
             mark = "x" if item.lower() in selected else " "
             print(f"  {number}. [{mark}] {item}")
 
         print("\n  Enter numbers to tick/untick (e.g. 1,3)")
         extras = "  A = Select all    N = Select none"
-
         if allow_custom:
             extras += "    T = Type a new one"
-
         print(extras)
         print("  B = Back")
 
@@ -342,63 +327,44 @@ def run_item_menu(title, items, selected, allow_custom=False):
 
         if choice == "b":
             return
-
         elif choice == "a":
             selected.update(item.lower() for item in items)
-
         elif choice == "n":
             selected.difference_update(item.lower() for item in items)
-
         elif choice == "t" and allow_custom:
             raw = input(CUSTOM_PROMPT)
-
             for new_item in parse_restrictions(raw):
                 if new_item == "none":
                     continue
-
                 if new_item not in items:
                     items.append(new_item)
-
                 selected.add(new_item)
-
         else:
             numbers = parse_number_list(choice, len(items))
-
             if numbers is None:
                 print("Invalid choice. Please try again.")
                 continue
-
+            # set() so "1,1" doesn't tick and untick the same item
             for number in set(numbers):
                 item = items[number - 1].lower()
-
                 if item in selected:
                     selected.remove(item)
                 else:
                     selected.add(item)
 
-
 def prompt_for_restrictions(current=None):
-    """Display the restriction menu and return selected restrictions."""
-    menu_entries = [
-        ("Allergies", category, items)
-        for category, items in ALLERGEN_CATALOG.items()
-    ]
-    menu_entries.append(
-        ("Restrictions", "Dietary / religious", DIETARY_RESTRICTIONS)
-    )
-
+    # --- Prompts the user for Restrictions via the category menu and Returns them ---
+    """Walks the user through the allergen menu. Returns a clean list, or ['none']."""
+    # Each entry: (group header, menu title, list of items)
+    menu_entries = [("Allergies", category, items) for category, items in ALLERGEN_CATALOG.items()]
+    menu_entries.append(("Restrictions", "Dietary / religious", DIETARY_RESTRICTIONS))
     other_number = len(menu_entries) + 1
-    selected = {
-        restriction.lower()
-        for restriction in (current or [])
-        if restriction.lower() != "none"
-    }
 
-    custom_items = sorted(
-        restriction
-        for restriction in selected
-        if restriction not in KNOWN_ITEMS
-    )
+    # Start from whatever the user already has saved (empty for new users)
+    selected = {r for r in (current or []) if r != "none"}
+
+    # Anything saved earlier that isn't in the catalog is kept under "Other"
+    custom_items = sorted(r for r in selected if r not in KNOWN_ITEMS)
 
     while True:
         show_category_menu(menu_entries, selected, custom_items)
@@ -406,176 +372,282 @@ def prompt_for_restrictions(current=None):
 
         if choice == "d":
             break
-
         elif choice == "c":
             selected.clear()
-
         elif choice.isdigit() and 1 <= int(choice) <= len(menu_entries):
             group, title, items = menu_entries[int(choice) - 1]
             run_item_menu(f"{group} > {title}", items, selected)
-
         elif choice.isdigit() and int(choice) == other_number:
-            run_item_menu(
-                "Other", custom_items, selected, allow_custom=True
-            )
-
+            run_item_menu("Other", custom_items, selected, allow_custom=True)
         else:
             print("Please enter a number, 'd' or 'c'.")
 
     return sorted(selected) if selected else ["none"]
 
+# Input handling for user authentication
+def handle_user_authentication(username=None, show_banner=True):
+    """Handles existing user check, profile editing, or new user registration."""
 
-# ============================================================
-# USER AUTHENTICATION — MERGED VERSION
-# ============================================================
+    # --- App banner ---
+    if show_banner:
+        print(f"\n{DIVIDER}")
+        print("   HAWKER DIETARY & INGREDIENT SAFETY AUDITOR")
+        print(f"{DIVIDER}\n")
 
-def handle_user_authentication():
-    """Handle admin login and regular user profile setup."""
-
-    print(f"\n{DIVIDER}")
-    print("   HAWKER DIETARY & INGREDIENT SAFETY AUDITOR")
-    print(DIVIDER)
-
-    while True:
+    # --- Get and validate username ---
+    if username is None:
         username = input("Enter your username: ").strip()
+    else:
+        username = username.strip()
 
-        if username.lower() == "admin":
-            if admin_authentication():
-                return "Admin", []
+    if not username:
+        # Fall back to a default rather than letting an empty username through
+        print("\nUsername cannot be empty. Defaulting to 'guest'.")
+        username = "guest"
 
-            print("Incorrect password.")
-            continue
-
-        if username and all(
-            char.isalnum() or char in {"_", "-"}
-            for char in username
-        ):
-            username = username.lower()
-            break
-
-        print(
-            "Invalid username. Use only letters, numbers, "
-            "underscores, or hyphens."
-        )
-
+    # Look up this username in the saved profiles (returns None if new)
     user_profile = get_user_profile(username)
 
     if user_profile:
+        # --- Existing user: show their saved data ---
         print(f"\nWelcome back, {user_profile['username']}!")
-        print(
-            "Current saved restrictions: "
-            f"{', '.join(user_profile['restrictions'])}"
-        )
+        print(f"Current saved restrictions: {', '.join(user_profile['restrictions'])}\n")
 
-        if get_yes_no_input(
-            "Would you like to update your dietary restrictions? (y/n): "
-        ) == "y":
-            restrictions = prompt_for_restrictions(
-                current=user_profile["restrictions"]
-            )
+        # Loop until the user gives a valid y/n answer
+        while True:
+            update_choice = input("Would you like to update your dietary restrictions? (y/n): ").strip().lower()
+            if update_choice in ['y', 'n']:
+                break
+            print("Please enter only 'y' or 'n'.")
+
+        if update_choice == 'y':
+            # --- User wants to change their restrictions (menu opens pre-ticked) ---
+            restrictions = prompt_for_restrictions(current=user_profile['restrictions'])
+
+            # Overwrite the profile in the JSON database
             restrictions = group_restrictions(restrictions)
             save_user_profile(username, restrictions)
-            print("Profile updated successfully!")
+            print(f"\nProfile updated! Saved {len(restrictions)} restriction(s): {', '.join(restrictions)}")
         else:
-            restrictions = user_profile["restrictions"]
-
+            # --- User declined to update: keep existing restrictions as-is ---
+            print("No updates made.")
+            restrictions = user_profile['restrictions']
     else:
-        print(
-            f"\nNew user detected ('{username}'). "
-            "Let's set up your dietary profile."
-        )
+        # --- New user: walk them through initial setup ---
+        print(f"\nNew user detected ('{username}'). Let's set up your dietary profile.")
         restrictions = prompt_for_restrictions()
+
+        # Create the profile for the first time
+        # Reformat the restrictions to group them according:
+        # Allergens
+        # Dietary Restrictions
+        # Others
         restrictions = group_restrictions(restrictions)
         save_user_profile(username, restrictions)
-        print(f"Profile saved successfully for {username}!")
+        print(f"\nProfile saved for {username}! Saved {len(restrictions)} restriction(s): {', '.join(restrictions)}")
 
+    # Hand back the username and their current (possibly just-updated) restrictions
     return username, restrictions
 
-
-# ============================================================
-# ADMIN PROFILE SEARCH — PRESERVED FROM EBAO
-# ============================================================
-
-def run_admin_profile_search(username):
-    """Allow the admin to search saved user profiles."""
-    if username != "Admin":
-        return True
-
-    choice = get_yes_no_input(
-        "\nSearch user profiles? (y/n): "
-    )
-
-    if choice == "n":
-        return False
-
-    search_term = input(
-        "Enter a username or dietary restriction to search for: "
-    ).strip()
-
-    if not search_term:
-        print("Search term cannot be blank.")
-        return True
-
-    matches = search_user_profiles(search_term)
-
-    if not matches:
-        print("No matching user profiles found.")
-        return True
-
-    print("\nMatching user profiles:")
-    for profile in matches:
-        print(
-            f"- {profile['username']}: "
-            f"{', '.join(profile['restrictions'])}"
-        )
-
-    return True
-
-
-# ============================================================
-# STALL AND DISH INPUT
-# ============================================================
-
+# Input handling for stall and dish
 def get_user_inputs():
-    """Prompt the user for the stall and dish to audit."""
+    """Prompts the user for the stall and dish they want to audit."""
+    # --- Audit section header ---
     print(f"\n{SECTION}")
     print(" NEW DISH AUDIT")
     print(f"{SECTION}\n")
 
-    stall = input("Enter the stall name/location: ").strip()
-    dish = input("Enter the dish name: ").strip()
-
-    return stall, dish
-
+    # --- Collect the two pieces of info needed to run the audit ---
     stall = input("Enter Hawker Centre or Stall Name (e.g., Maxwell Food Centre): ").strip()
     dish = input("Enter Dish Name (e.g., Chicken Rice): ").strip()
 
     return stall, dish
 
-def display_audit_result(username, stall, dish, restrictions, result_data):
-    """Displays the final processed audit report clearly to the user."""
-    print("\n==============================================")
-    print("               AUDIT RESULT REPORT            ")
-    print("==============================================")
-    print(f"User Profile         : {username} ({', '.join(restrictions)})")
-    print(f"Location / Stall     : {stall}")
-    print(f"Dish Evaluated       : {dish}")
-    print(f"Risk Score           : {result_data.get('risk_score')}%")
-    print(f"Risk Level           : {result_data.get('risk_level')}")
-
-    safety_status = "SAFE TO EAT" if result_data.get('is_safe') else "NOT SAFE / AVOID"
-    print(f"Safety Status        : [{safety_status}]")
-
-    print(f"Stall Insights       : {result_data.get('stall_specific_insights')}")
-    print(f"Hidden Ingredients   : {', '.join(result_data.get('hidden_ingredients', []))}")
-    print(f"Reasoning            : {result_data.get('reasoning')}")
-    print("----------------------------------------------")
-    print("⚠️ ADVISORY DISCLAIMER: This tool is advisory only.")
-    print("   Always verify with store owners for safety.")
-    print("==============================================\n")
 # --- AI Error Display Helpers ---
 def display_api_key_error():
     print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
 
 def display_attempt_error(attempt, max_tries, error):
     print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
+
+ADMIN_USERNAME = "ADMIN"
+ADMIN_PASSWORD = "ADMIN123"
+
+def is_admin_username(username):
+    return username.casefold() == ADMIN_USERNAME.casefold()
+
+
+def _restriction_items(restrictions, category):
+    """Return a normalized list of restrictions for one profile category."""
+    if not isinstance(restrictions, dict):
+        return []
+
+    items = restrictions.get(category, [])
+    if isinstance(items, str):
+        items = [items]
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, str)]
+
+
+def _display_profile(user):
+    print(f"\nUsername: {user.username}")
+    restrictions = user.restrictions or {}
+    for category, label in (
+        ("allergies", "Allergies"),
+        ("dietary_restrictions", "Dietary restrictions"),
+        ("other", "Other restrictions")
+    ):
+        items = _restriction_items(restrictions, category)
+        print(f"  {label}: {', '.join(items) if items else 'None'}")
+
+
+def _search_user_profiles():
+    name = input("Enter a username or part of a username: ").strip()
+    if not name:
+        print("Username search cannot be blank.")
+        return
+
+    with SessionLocal() as session:
+        users = session.scalars(
+            select(User).where(
+                func.lower(User.username).contains(name.lower())
+            ).order_by(User.username)
+        ).all()
+
+        if not users:
+            print("No matching user profiles found.")
+            return
+        for user in users:
+            _display_profile(user)
+
+
+def _search_dietary_restriction():
+    term = input("Enter a restriction keyword to search for: ").strip()
+    if not term:
+        print("Restriction keyword cannot be blank.")
+        return
+
+    with SessionLocal() as session:
+        users = session.scalars(select(User).order_by(User.username)).all()
+        matches = [
+            user for user in users
+            if any(
+                term.casefold() in item.casefold()
+                for category in (
+                    "allergies",
+                    "dietary_restrictions",
+                    "other"
+                )
+                for item in _restriction_items(user.restrictions, category)
+            )
+        ]
+
+        if not matches:
+            print("No profiles found with that restriction keyword.")
+            return
+        for user in matches:
+            _display_profile(user)
+
+
+def _filter_audit_history_by_allergy():
+    categories = list(ALLERGEN_CATALOG.items())
+    print("\nALLERGIES")
+    for number, (category, _) in enumerate(categories, start=1):
+        print(f"    {number}. {category}")
+    print("\n  RESTRICTIONS")
+    print(f"    {len(categories) + 1}. Dietary / religious")
+    print("\n  OTHER")
+    print(f"    {len(categories) + 2}. Other")
+
+    choice = input(
+        f"Select a category (1-{len(categories) + 2}): "
+    ).strip()
+    if not choice.isdigit() or not 1 <= int(choice) <= len(categories) + 2:
+        print("Invalid category selection.")
+        return
+
+    selected = int(choice)
+    if selected <= len(categories):
+        selected_category, category_items = categories[selected - 1]
+        restriction_key = "allergies"
+        selected_items = {item.casefold() for item in category_items}
+    elif selected == len(categories) + 1:
+        selected_category = "Dietary / religious"
+        restriction_key = "dietary_restrictions"
+        selected_items = None
+    else:
+        selected_category = "Other"
+        restriction_key = "other"
+        selected_items = None
+
+    with SessionLocal() as session:
+        rows = session.execute(
+            select(AuditLog, User)
+            .join(User, AuditLog.user_id == User.user_id)
+            .order_by(AuditLog.created_at.desc())
+        ).all()
+        matches = [
+            (audit, user) for audit, user in rows
+            if (
+                any(
+                    item.casefold() in selected_items
+                    for item in _restriction_items(
+                        audit.restrictions_snapshot, restriction_key
+                    )
+                )
+                if selected_items is not None
+                else bool(
+                    _restriction_items(
+                        audit.restrictions_snapshot, restriction_key
+                    )
+                )
+            )
+        ]
+
+        if not matches:
+            print(
+                f"No audit history found for category '{selected_category}'."
+            )
+            return
+
+        print(f"\nAudit history for: {selected_category}")
+        for audit, user in matches:
+            print(
+                f"\n{audit.created_at} | {user.username} | "
+                f"{audit.stall or 'Unknown stall'} - "
+                f"{audit.dish or 'Unknown dish'} | "
+                f"Safe: {audit.is_safe} | Risk: {audit.risk_level or 'Unknown'}"
+            )
+
+
+def _run_admin_menu():
+    print("\nWelcome, Admin!")
+    while True:
+        print(
+            "\nADMIN MENU\n"
+            "1. Search for a user profile\n"
+            "2. Search profiles by restriction keyword\n"
+            "3. Filter audit history by restriction category\n"
+            "4. Exit admin menu"
+        )
+        choice = input("Select an option: ").strip()
+
+        if choice == "1":
+            _search_user_profiles()
+        elif choice == "2":
+            _search_dietary_restriction()
+        elif choice == "3":
+            _filter_audit_history_by_allergy()
+        elif choice == "4":
+            print("Exiting admin menu. Stay safe!")
+            return
+        else:
+            print("Please choose an option from 1 to 4.")
+
+
+def run_admin_login():
+    if getpass("Enter admin password: ") != ADMIN_PASSWORD:
+        print("Invalid admin password. Access denied.")
+        return
+    _run_admin_menu()

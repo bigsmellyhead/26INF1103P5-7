@@ -1,18 +1,35 @@
-# main.py
-from io_manager import handle_user_authentication, run_admin_profile_search, get_user_inputs, display_audit_result, get_yes_no_input
+
+from io_manager import (
+    handle_user_authentication,
+    get_user_inputs,
+    display_audit_result,
+    DIVIDER,
+    is_admin_username,
+    run_admin_login
+)
 from ai_manager import query_ai_safety_auditor
 from logic_manager import validate_and_process_logic
 from data_manager import initialize_database, append_audit_log
 
+
 def main():
+    # Initialize MySQL database and create missing tables
     initialize_database()
 
-    # Authenticate Admin or register user profile
-       username, restrictions = handle_user_authentication()
-       run_admin_profile_search(username)
-       if username == "Admin":
-           print("\nDatabase search concluded. See you next time!")
-           return
+    print(f"\n{DIVIDER}")
+    print("   HAWKER DIETARY & INGREDIENT SAFETY AUDITOR")
+    print(f"{DIVIDER}\n")
+    entered_username = input("Enter your username: ").strip()
+
+    if is_admin_username(entered_username):
+        run_admin_login()
+        return
+
+    # Authenticate or register a regular user without asking for the name twice.
+    username, restrictions = handle_user_authentication(
+        username=entered_username,
+        show_banner=False
+    )
 
     while True:
         stall, dish = get_user_inputs()
@@ -22,17 +39,23 @@ def main():
             continue
 
         try:
-            print("\nProcessing audit with temporary local reasoning engine...")
+            print("\nProcessing audit with AI reasoning engine...")
 
-             # Query LLM API
-            ai_output = query_ai_safety_auditor(stall, dish, restrictions)
+            # Query LLM API
+            ai_output = query_ai_safety_auditor(
+                stall, dish, restrictions
+            )
 
-            # The AI manager returns None after all its tries fail
             if ai_output is None:
-                raise ValueError("The AI could not complete this audit after several tries.")
+                raise ValueError(
+                    "The AI could not complete this audit after several "
+                    "tries or the API key is not configured properly."
+                )
 
             # Validate schema and enforce rules
-            processed_data = validate_and_process_logic(ai_output, restrictions)
+            processed_data = validate_and_process_logic(
+                ai_output, restrictions
+            )
 
             # Form final log entry
             final_record = {
@@ -43,7 +66,7 @@ def main():
                 **processed_data
             }
 
-            # Save to JSON flat file database
+            # Save audit record to MySQL
             append_audit_log(final_record)
 
             # Display results

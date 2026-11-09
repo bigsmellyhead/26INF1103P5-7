@@ -1,51 +1,121 @@
-# data_manager.py
-import json
-import os
 
-DB_FILE = "audit_history.json"
+from sqlalchemy import select, func
+
+from database.database import SessionLocal, init_db
+from database.models import User, AuditLog
+
 
 def initialize_database():
-    """Ensures the JSON file exists with a basic structure and won't crash if cleared."""
-    if not os.path.exists(DB_FILE):
-        create_default_db()
-    else:
-        try:
-            with open(DB_FILE, "r") as file:
-                data = json.load(file)
-                if not isinstance(data, dict) or "users" not in data or "audit_logs" not in data:
-                    create_default_db()
-        except (json.JSONDecodeError, ValueError):
-            create_default_db()
+    """Initialize the MySQL database tables."""
+    init_db()
 
-def create_default_db():
-    initial_data = {
-        "users": {},
-        "audit_logs": []
-    }
-    save_database(initial_data)
-
-def load_database():
-    initialize_database()
-    with open(DB_FILE, "r") as file:
-        return json.load(file)
-
-def save_database(data):
-    with open(DB_FILE, "w") as file:
-        json.dump(data, file, indent=4)
 
 def get_user_profile(username):
-    db = load_database()
-    return db["users"].get(username.lower())
+    """Retrieve a user's profile using their username."""
+    if not username or not username.strip():
+        return None
+
+    normalized_username = username.strip().lower()
+
+    with SessionLocal() as session:
+        user = session.scalar(
+            select(User).where(
+                func.lower(User.username) == normalized_username
+            )
+        )
+
+        if user is None:
+            return None
+
+        return {
+            "username": user.username,
+            "restrictions": user.restrictions
+        }
+
 
 def save_user_profile(username, restrictions):
-    db = load_database()
-    db["users"][username.lower()] = {
-        "username": username,
-        "restrictions": restrictions
-    }
-    save_database(db)
+    """Register a new user or update their restrictions."""
+    if not username or not username.strip():
+        raise ValueError("Username cannot be empty.")
+
+    if not isinstance(restrictions, dict):
+        raise ValueError("Restrictions must be a dictionary.")
+
+    normalized_username = username.strip().lower()
+
+    with SessionLocal.begin() as session:
+        user = session.scalar(
+            select(User).where(
+                func.lower(User.username) == normalized_username
+            )
+        )
+
+        if user is None:
+            user = User(
+                username=username.strip(),
+                restrictions=restrictions
+            )
+            session.add(user)
+        else:
+            user.restrictions = restrictions
+
 
 def append_audit_log(audit_record):
-    db = load_database()
-    db["audit_logs"].append(audit_record)
-    save_database(db)
+    """Save an audit result into MySQL."""
+    if not isinstance(audit_record, dict):
+        raise ValueError("Audit record must be a dictionary.")
+
+    username = audit_record.get("username")
+
+    if not isinstance(username, str) or not username.strip():
+        raise ValueError("Audit record must contain a valid username.")
+
+    restrictions = audit_record.get("restrictions") or {
+        "allergies": [],
+        "dietary_restrictions": [],
+        "other": []
+    }
+
+    if not isinstance(restrictions, dict):
+        raise ValueError("Restrictions must be a dictionary.")
+
+    normalized_username = username.strip().lower()
+
+    with SessionLocal.begin() as session:
+        user = session.scalar(
+            select(User).where(
+                func.lower(User.username) == normalized_username
+            )
+        )
+
+        # Create the user if they do not exist yet
+        if user is None:
+            user = User(
+                username=username.strip(),
+                restrictions=restrictions
+            )
+            session.add(user)
+
+        # Store the audit result in the appropriate columns
+        audit = AuditLog(
+            user=user,
+            stall=audit_record.get("stall"),
+            dish=audit_record.get("dish"),
+            is_safe=audit_record.get("is_safe"),
+            risk_level=audit_record.get("risk_level"),
+            risk_score=audit_record.get("risk_score"),
+            reasoning=audit_record.get("reasoning"),
+            restrictions_snapshot=restrictions,
+            allergy_conflicts=audit_record.get("allergy_conflicts") or [],
+            hidden_ingredients=audit_record.get("hidden_ingredients") or [],
+            cross_contact_risks=audit_record.get("cross_contact_risks") or [],
+            ingredient_tree=audit_record.get("ingredient_tree") or {},
+            dietary_status=audit_record.get("dietary_status") or {},
+            flags=audit_record.get("flags") or [],
+            stall_knowledge=audit_record.get("stall_knowledge"),
+            stall_specific_insights=audit_record.get(
+                "stall_specific_insights"
+            )
+        )
+
+        session.add(audit)
