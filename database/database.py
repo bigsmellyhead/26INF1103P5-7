@@ -6,7 +6,6 @@ from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 load_dotenv()
 
-
 # Base class for all database models
 class Base(DeclarativeBase):
     pass
@@ -21,7 +20,6 @@ DATABASE_URL = URL.create(
     port=int(os.getenv("MYSQL_PORT", "3306")),
     database=os.getenv("MYSQL_DATABASE", "hawker_safety_auditor")
 )
-
 
 # Create MySQL engine
 engine = create_engine(
