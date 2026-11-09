@@ -1,4 +1,188 @@
 {
-    "users": {},
-    "audit_logs": []
+    "users": {
+        "allye": {
+            "username": "Allye",
+            "restrictions": {
+                "allergies": [
+                    "lactose",
+                    "milk",
+                    "peanut"
+                ],
+                "dietary_restrictions": [],
+                "other": []
+            }
+        }
+    },
+    "audit_logs": [
+        {
+            "username": "Allye",
+            "restrictions": {
+                "allergies": [
+                    "lactose",
+                    "milk",
+                    "peanut"
+                ],
+                "dietary_restrictions": [],
+                "other": []
+            },
+            "stall": "astons",
+            "dish": "cream pasta",
+            "stall_knowledge": "Inferred",
+            "is_safe": false,
+            "risk_level": "High",
+            "risk_score": 95,
+            "stall_specific_insights": "Western chain outlets typically use heavy cream and butter bases for cream pastas.",
+            "reasoning": "Contains dairy and milk triggers in the primary sauce.",
+            "hidden_ingredients": [
+                "Butter",
+                "Parmesan cheese",
+                "Heavy cream"
+            ],
+            "cross_contact_risks": [],
+            "dietary_status": {},
+            "allergy_conflicts": [
+                "lactose",
+                "milk"
+            ],
+            "ingredient_tree": {
+                "name": "Cream Pasta",
+                "status": "Trigger",
+                "conflict": null,
+                "stall_insight": null,
+                "children": [
+                    {
+                        "name": "Cream Sauce",
+                        "status": "Trigger",
+                        "conflict": null,
+                        "stall_insight": "Typically prepared with heavy cream and butter.",
+                        "children": [
+                            {
+                                "name": "Heavy cream",
+                                "status": "Trigger",
+                                "conflict": "Contains dairy allergens",
+                                "stall_insight": null
+                            },
+                            {
+                                "name": "Butter",
+                                "status": "Trigger",
+                                "conflict": "Contains dairy allergens",
+                                "stall_insight": null
+                            },
+                            {
+                                "name": "Parmesan cheese",
+                                "status": "Trigger",
+                                "conflict": "Contains dairy allergens",
+                                "stall_insight": null
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Pasta",
+                        "status": "Safe",
+                        "conflict": null,
+                        "stall_insight": null,
+                        "children": []
+                    }
+                ]
+            },
+            "flags": [
+                "Stall practice affects 'Cream Sauce': Typically prepared with heavy cream and butter."
+            ]
+        },
+        {
+            "username": "Allye",
+            "restrictions": {
+                "allergies": [
+                    "lactose",
+                    "milk",
+                    "peanut"
+                ],
+                "dietary_restrictions": [],
+                "other": []
+            },
+            "stall": "lau pa sat",
+            "dish": "rojak",
+            "stall_knowledge": "Inferred",
+            "is_safe": false,
+            "risk_level": "High",
+            "risk_score": 90,
+            "stall_specific_insights": "Rojak at satay stalls typically features a heavy peanut-based sauce and crushed peanut topping.",
+            "reasoning": "Peanut allergy is violated by the core sauce ingredients and topping.",
+            "hidden_ingredients": [
+                "hae ko",
+                "roasted peanuts"
+            ],
+            "cross_contact_risks": [
+                "Shared utensil for peanut garnish"
+            ],
+            "dietary_status": {},
+            "allergy_conflicts": [
+                "Peanuts",
+                "Milk"
+            ],
+            "ingredient_tree": {
+                "name": "Rojak",
+                "status": "Trigger",
+                "conflict": null,
+                "stall_insight": null,
+                "children": [
+                    {
+                        "name": "Sauce",
+                        "status": "Trigger",
+                        "conflict": null,
+                        "stall_insight": null,
+                        "children": [
+                            {
+                                "name": "Prawn paste",
+                                "status": "Safe",
+                                "conflict": null,
+                                "stall_insight": null
+                            },
+                            {
+                                "name": "Ground peanuts",
+                                "status": "Trigger",
+                                "conflict": "Severe allergen",
+                                "stall_insight": null
+                            },
+                            {
+                                "name": "Sugar and tamarind",
+                                "status": "Safe",
+                                "conflict": null,
+                                "stall_insight": null
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Garnish",
+                        "status": "Trigger",
+                        "conflict": null,
+                        "stall_insight": null,
+                        "children": [
+                            {
+                                "name": "Crushed peanuts",
+                                "status": "Trigger",
+                                "conflict": "Severe allergen",
+                                "stall_insight": null
+                            }
+                        ]
+                    },
+                    {
+                        "name": "Produce",
+                        "status": "Safe",
+                        "conflict": null,
+                        "stall_insight": null,
+                        "children": [
+                            {
+                                "name": "Fruits and dough fritters",
+                                "status": "Safe",
+                                "conflict": null,
+                                "stall_insight": null
+                            }
+                        ]
+                    }
+                ]
+            },
+            "flags": []
+        }
+    ]
 }
