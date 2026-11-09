@@ -1,24 +1,28 @@
 
-from io_manager import (
-    handle_user_authentication,
-    get_user_inputs,
-    display_audit_result
-)
-
+from io_manager import IOManager
 from ai_manager import query_ai_safety_auditor
-from logic_manager import validate_and_process_logic
+from logic_manager import LogicManager
 from data_manager import initialize_database, append_audit_log
-
+from EventBus import event_bus
+from EventName import EventName
+import time
+from Data import AttemptErrorData, APIKeyErrorData, ValidateProcessData
 
 def main():
+    #Initialise all the managers
+    io_manager = IOManager()
     # Initialize MySQL database and create missing tables
     initialize_database()
 
     # Authenticate or register user profile
-    username, restrictions = handle_user_authentication()
+    username, restrictions = io_manager.handle_user_authentication()
+
+    logic_manager = LogicManager(event_bus)
+    audit_results = []
+    event_bus.subscribe_event(EventName.AUDITRESULTDATA, audit_results.append)
 
     while True:
-        stall, dish = get_user_inputs()
+        stall, dish = io_manager.get_user_inputs()
 
         if not stall or not dish:
             print("Error: Stall and dish names cannot be blank.")
@@ -39,9 +43,14 @@ def main():
                 )
 
             # Validate schema and enforce rules
-            processed_data = validate_and_process_logic(
-                ai_output, restrictions
+            audit_results.clear()
+            event_bus.raise_event(
+                EventName.VALIDATEPROCESSDATA,
+                ValidateProcessData(ai_output, restrictions, username, stall, dish)
             )
+            event_bus.update()   # runs LogicManager, which raises AUDITRESULTDATA
+            event_bus.update()   # delivers the finished audit to audit_results
+            processed_data = audit_results.pop().result
 
             # Form final log entry
             final_record = {
@@ -56,7 +65,7 @@ def main():
             append_audit_log(final_record)
 
             # Display results
-            display_audit_result(
+            io_manager.display_audit_result(
                 username,
                 stall,
                 dish,
