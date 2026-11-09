@@ -6,7 +6,7 @@ import logging
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv 
-from io_manager import display_api_key_error, display_attempt_error
+#from io_manager import display_api_key_error, display_attempt_error
 
 # Configue logging to save logs to api.logs, filemode 'a' to allow appending of new logs
 # ERROR level are logged,in the format of date/time, level, message...
@@ -249,7 +249,7 @@ def query_ai_safety_auditor(stall, dish, restrictions):
     if not api_key:
          #error will be logged to api.logs
          logging.error("GEMINI_API_KEY is not set")
-         display_api_key_error()
+         #display_api_key_error()
          return None
 
     client = genai.Client(api_key=api_key)
@@ -301,7 +301,7 @@ def query_ai_safety_auditor(stall, dish, restrictions):
         except Exception as error:
             #error will be logged to api.logs
             logging.error(f"Attempt {attempt}/{max_tries}:API has error: {error} ")
-            display_attempt_error(attempt, max_tries, error)
+            #display_attempt_error(attempt, max_tries, error)
             if attempt < max_tries:
                 time.sleep(2 * attempt)   # wait 2s after the 1st failure, 4s after the 2nd
             

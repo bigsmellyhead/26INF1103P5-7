@@ -4,7 +4,7 @@ class Restriction:
     __category: RestrictionCategory # Specifies which bucket it falls into. eg. Allergy, Dietary restriction or others
 
     #Initialise Restriction
-    def __init__(self, name, category):
+    def __init__(self, name: str, category: RestrictionCategory):
         self.__name = name
         self.__category = category
 
@@ -14,4 +14,4 @@ class Restriction:
 
     @property 
     def category(self):
-        return self.category
+        return self.__category

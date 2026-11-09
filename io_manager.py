@@ -4,13 +4,12 @@ from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS
 from EventBus import event_bus
 from EventName import EventName
 import utils
+from Data import AttemptErrorData, APIKeyErrorData
 
 class IOManager:
-
     def __init__(self):
         event_bus.subscribe_event(EventName.APIKEYERROR, self.display_api_key_error)
-        event_bus.subscribe_event(EventName.ATTEMPTERROR, self.display_api_key_error)
-
+        event_bus.subscribe_event(EventName.ATTEMPTERROR, self.display_attempt_error)
 
     """!
     @brief   - Prints the structured summary of a user's allergies, dietary restrictions, and other flags.
@@ -23,7 +22,7 @@ class IOManager:
     @param restrictions - A dictionary containing lists mapping to the keys "allergies", "dietary_restrictions", and "others".
     @return None
     """
-    def print_user_restrictions(restrictions):
+    def print_user_restrictions(self, restrictions):
         categories = [
             ("allergies", "Allergies"),
             ("dietary_restrictions", "Dietary Restrictions"),
@@ -49,7 +48,7 @@ class IOManager:
     @note - Utilizes local ANSI constants (`COLOR_RED`, `COLOR_YELLOW`, `COLOR_GREEN`, `COLOR_RESET`) to output color metrics into the terminal interface.
     @return None
     """
-    def print_risk_assessment(result_data):
+    def print_risk_assessment(self, result_data):
         # ANSI Colour definitions
         CURRENT_COLOR = ""
         #Analyse Risk Score and assign color codes based on risk score
@@ -75,7 +74,7 @@ class IOManager:
     @param result_data - Dictionary containing 'allergy_conflicts' key 
     @return None
     """
-    def print_allergy_conflicts(result_data):
+    def print_allergy_conflicts(self, result_data):
         conflicts = result_data.get("allergy_conflicts",[])
 
         if not conflicts:
@@ -93,7 +92,7 @@ class IOManager:
     @param result_data - Dictionary containing 'dietary_status' key
     @return None
     """
-    def print_dietary_status(result_data):
+    def print_dietary_status(self, result_data):
         dietary_status = result_data.get("dietary_status",{})
         
         if not dietary_status:
@@ -111,7 +110,7 @@ class IOManager:
     @param result_data - Dictionary containing 'cross_contact_risks' key
     @return None
     """
-    def print_cross_contact_risks(result_data):
+    def print_cross_contact_risks(self, result_data):
         cross_contact_risks = result_data.get("cross_contact_risks",[])
         if not cross_contact_risks:
             print("⚠️  Cross-Contamination Risks: None")
@@ -119,47 +118,26 @@ class IOManager:
             print("⚠️  Cross-Contamination Risks:")
             for risk in cross_contact_risks:
                 print(f"• [ENVIRONMENTAL RISK] {risk}")
-
-    """!
-    @brief   - Prints the full ingredient breakdown and traceability tree to stdout
-    @details - Checks for valid result data, prints the section header, extracts the root 
-            dish name from the 'ingredient_tree', and initiates the recursive 
-            child tree printing function.
-
-    @param result_data - Dictionary containing the 'ingredient_tree' key mapping to the root node.
-    @return None
-    """
-    def print_ingredient_breakdown_tree(result_data):
-        if not result_data:
-            return
-
-        print(f"{utils.SECTION}")
-        print("🌳 FULL INGREDIENT BREAKDOWN & TRACEABILITY:")
-        print(f"{utils.SECTION}")
-        ingredient_list = result_data.get("ingredient_tree")
-        print(f"Dish: {ingredient_list["name"]}")
-        print_children_tree(ingredient_list, "")
-
-    """!
-    @brief   - Recursively prints the child nodes of an ingredient tree with structural tree lines
-    @details - Iterates through the children of a starting node, checks their status and 
-            conflict state to apply color formatting, and recursively processes nested 
-            sub-children with proper indentation and tree branching symbols (├── and └──).
-
-    @param starting_node - Dictionary representing the current node (contains 'name', 'status', 'conflict', and optionally 'children').
-    @param prefix        - String used for tracking recursive indentation and tree alignment.
-    @return None
-    """
-
-    def has_triggered_descendant(node):
+    
+    def has_triggered_descendant(self, node):
         if node.get("conflict") and node.get("status") == "Trigger":
             return True
         for child in node.get("children", []):
-            if has_triggered_descendant(child):
+            if self.has_triggered_descendant(child):
                 return True
         return False
 
-    def print_children_tree(starting_node, prefix = ""):
+    """!
+        @brief   - Recursively prints the child nodes of an ingredient tree with structural tree lines
+        @details - Iterates through the children of a starting node, checks their status and 
+                conflict state to apply color formatting, and recursively processes nested 
+                sub-children with proper indentation and tree branching symbols (├── and └──).
+    
+        @param starting_node - Dictionary representing the current node (contains 'name', 'status', 'conflict', and optionally 'children').
+        @param prefix        - String used for tracking recursive indentation and tree alignment.
+        @return None
+        """
+    def print_children_tree(self, starting_node, prefix = ""):
         children = starting_node["children"]
 
         symbol_startTree = "├── "
@@ -173,7 +151,7 @@ class IOManager:
             child_verdict = ""
 
             # Factor in whether the node itself has a conflict or has triggered descendants
-            if child_status == "Trigger" and (child_conflict or has_triggered_descendant(child)):
+            if child_status == "Trigger" and (child_conflict or self.has_triggered_descendant(child)):
                 if child_conflict:
                     child_verdict = f"{utils.COLOR_RED}<-----[{child_status}: {child_conflict}]{utils.COLOR_RESET}"
                 else:
@@ -194,69 +172,36 @@ class IOManager:
                 print(f"{prefix}{indentation}↳ {utils.COLOR_YELLOW}Stall: {child_insight}{utils.COLOR_RESET}")
                 
             if("children" in child):
-                print_children_tree(child, prefix + indentation)
-
+                self.print_children_tree(child, prefix + indentation)
 
     """!
-    @brief   - Displays the final processed audit report clearly to the user
-    @details - Compiles and prints a comprehensive dish safety audit to stdout. 
-            This includes user profile/restrictions, stall details, knowledge status, 
-            risk assessment, allergy conflicts, dietary status, cross-contamination 
-            risks, and the full ingredient breakdown tree, followed by an advisory disclaimer.
+    @brief   - Prints the full ingredient breakdown and traceability tree to stdout
+    @details - Checks for valid result data, prints the section header, extracts the root 
+            dish name from the 'ingredient_tree', and initiates the recursive 
+            child tree printing function.
 
-    @param username    - The name of the user requesting the audit.
-    @param stall       - The location or stall name where the dish is served.
-    @param dish        - The name of the dish being audited.
-    @param restrictions - A dictionary containing the user's dietary restrictions and allergies.
-    @param result_data  - A dictionary containing audit results (stall knowledge, insights, conflicts, tree, etc.).
+    @param result_data - Dictionary containing the 'ingredient_tree' key mapping to the root node.
     @return None
     """
-    def display_audit_result(username, stall, dish, restrictions, result_data):
-        stall_knowledge = result_data["stall_knowledge"]
-        stall_emoji = "🟢" if stall_knowledge == "Known" else "🟡" if stall_knowledge == "Inferred" else "🔴"
-        """Displays the final processed audit report clearly to the user."""
-        print(f"{utils.DIVIDER}")
-        print("                         DISH SAFETY AUDIT            ")
-        print(f"{utils.DIVIDER}")
+    def print_ingredient_breakdown_tree(self, result_data):
+        if not result_data:
+            return
 
-        # User and Restrictions section
-        print(f"[USERNAME] {username}")
-        print(f"[USER PROFILE & RESTRICTIONS]")
-        print_user_restrictions(restrictions)
-
-        # Stall and Insights Section
-        print(f"[DISH] {dish}")
-        print(f"[LOCATION/STALL] {stall}\n")
-        print(f"[STALL STATUS: {stall_knowledge} {stall_emoji}]")
-        print(f"[Stall Insights]")
-        print(f"{result_data.get('stall_specific_insights')}\n")
-
-        # Risk Assessment Section
         print(f"{utils.SECTION}")
-        print_risk_assessment(result_data)
-        print_allergy_conflicts(result_data)
-        print("")
-        print_dietary_status(result_data)
-        print("")
-        print_cross_contact_risks(result_data)
-        print("")
-
-        # Ingredient Breakdown Section
-        print_ingredient_breakdown_tree(result_data)
-
-        print(f"\n{utils.DIVIDER}")
-        print("⚠️  ADVISORY DISCLAIMER: This tool is advisory only.")
-        print("   Always verify with store owners for safety.")
-        print(f"{utils.DIVIDER}")
+        print("🌳 FULL INGREDIENT BREAKDOWN & TRACEABILITY:")
+        print(f"{utils.SECTION}")
+        ingredient_list = result_data.get("ingredient_tree")
+        print(f"Dish: {ingredient_list["name"]}")
+        self.print_children_tree(ingredient_list, "")
 
     # Input handling for restrictions
-    def parse_restrictions(raw_text):
+    def parse_restrictions(self, raw_text):
         # --- Spliting of Allergies / Restrictions by commas "," ---
         """Split comma-separated input into a clean list. Returns ['none'] if empty."""
         items = [r.strip().lower() for r in raw_text.split(",") if r.strip()]
         return items if items else ["none"]
 
-    def parse_number_list(raw_text, max_value):
+    def parse_number_list(self, raw_text, max_value):
         # --- Turns "1, 3 4" into [1, 3, 4]. Returns None if anything is invalid ---
         parts = raw_text.replace(",", " ").split()
         if not parts or not all(p.isdigit() for p in parts):
@@ -266,7 +211,7 @@ class IOManager:
             return None
         return numbers
 
-    def show_category_menu(menu_entries, selected, custom_items):
+    def show_category_menu(self, menu_entries, selected, custom_items):
         # --- Level 1: Allergies first, then Restrictions, then Other ---
         # menu_entries is a list of (group, title, items) tuples
         print(f"\n{utils.SECTION}")
@@ -293,7 +238,7 @@ class IOManager:
         print("  D = Done    C = Clear everything")
         print(f"\nCurrently selected: {', '.join(sorted(selected)) if selected else 'none'}")
 
-    def run_item_menu(title, items, selected, allow_custom=False):
+    def run_item_menu(self, title, items, selected, allow_custom=False):
         # --- Level 2: tick / untick specific allergens inside one category ---
         # `selected` (a set) and `items` (a list) are edited in place.
         while True:
@@ -324,14 +269,14 @@ class IOManager:
                 selected.difference_update(item.lower() for item in items)
             elif choice == "t" and allow_custom:
                 raw = input(utils.CUSTOM_PROMPT)
-                for new_item in parse_restrictions(raw):
+                for new_item in self.parse_restrictions(raw):
                     if new_item == "none":
                         continue
                     if new_item not in items:
                         items.append(new_item)
                     selected.add(new_item)
             else:
-                numbers = parse_number_list(choice, len(items))
+                numbers = self.parse_number_list(choice, len(items))
                 if numbers is None:
                     print("Invalid choice. Please try again.")
                     continue
@@ -343,7 +288,7 @@ class IOManager:
                     else:
                         selected.add(item)
 
-    def prompt_for_restrictions(current=None):
+    def prompt_for_restrictions(self, current=None):
         # --- Prompts the user for Restrictions via the category menu and Returns them ---
         """Walks the user through the allergen menu. Returns a clean list, or ['none']."""
         # Each entry: (group header, menu title, list of items)
@@ -358,7 +303,7 @@ class IOManager:
         custom_items = sorted(r for r in selected if r not in KNOWN_ITEMS)
 
         while True:
-            show_category_menu(menu_entries, selected, custom_items)
+            self.show_category_menu(menu_entries, selected, custom_items)
             choice = input("Your choice: ").strip().lower()
 
             if choice == "d":
@@ -367,16 +312,16 @@ class IOManager:
                 selected.clear()
             elif choice.isdigit() and 1 <= int(choice) <= len(menu_entries):
                 group, title, items = menu_entries[int(choice) - 1]
-                run_item_menu(f"{group} > {title}", items, selected)
+                self.run_item_menu(f"{group} > {title}", items, selected)
             elif choice.isdigit() and int(choice) == other_number:
-                run_item_menu("Other", custom_items, selected, allow_custom=True)
+                self.run_item_menu("Other", custom_items, selected, allow_custom=True)
             else:
                 print("Please enter a number, 'd' or 'c'.")
 
         return sorted(selected) if selected else ["none"]
 
     # Input handling for user authentication
-    def handle_user_authentication():
+    def handle_user_authentication(self):
         """Handles existing user check, profile editing, or new user registration."""
 
         # --- App banner ---
@@ -409,7 +354,7 @@ class IOManager:
 
             if update_choice == 'y':
                 # --- User wants to change their restrictions (menu opens pre-ticked) ---
-                restrictions = prompt_for_restrictions(current=user_profile['restrictions'])
+                restrictions = self.prompt_for_restrictions(current=user_profile['restrictions'])
 
                 # Overwrite the profile in the JSON database
                 restrictions = group_restrictions(restrictions)
@@ -422,7 +367,7 @@ class IOManager:
         else:
             # --- New user: walk them through initial setup ---
             print(f"\nNew user detected ('{username}'). Let's set up your dietary profile.")
-            restrictions = prompt_for_restrictions()
+            restrictions = self.prompt_for_restrictions()
 
             # Create the profile for the first time
             # Reformat the restrictions to group them according:
@@ -430,6 +375,8 @@ class IOManager:
             # Dietary Restrictions
             # Others
             restrictions = group_restrictions(restrictions)
+
+            ## Save to database
             save_user_profile(username, restrictions)
             print(f"\nProfile saved for {username}! Saved {len(restrictions)} restriction(s): {', '.join(restrictions)}")
 
@@ -437,7 +384,7 @@ class IOManager:
         return username, restrictions
 
     # Input handling for stall and dish
-    def get_user_inputs():
+    def get_user_inputs(self):
         """Prompts the user for the stall and dish they want to audit."""
         # --- Audit section header ---
         print(f"\n{utils.SECTION}")
@@ -451,8 +398,66 @@ class IOManager:
         return stall, dish
 
     # --- AI Error Display Helpers ---
-    def display_api_key_error():
-        print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
+    def display_api_key_error(self, data : APIKeyErrorData):
+        #print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
+        print(f"{data.error_msg}")
 
-    def display_attempt_error(attempt, max_tries, error):
+    def display_attempt_error(self, data : AttemptErrorData):
+        if not data: raise ValueError("Data is empty")
+
+        attempt = data.attempt
+        max_tries = data.max_tries
+        error = data.error
         print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
+
+    """!
+    @brief   - Displays the final processed audit report clearly to the user
+    @details - Compiles and prints a comprehensive dish safety audit to stdout. 
+            This includes user profile/restrictions, stall details, knowledge status, 
+            risk assessment, allergy conflicts, dietary status, cross-contamination 
+            risks, and the full ingredient breakdown tree, followed by an advisory disclaimer.
+
+    @param username    - The name of the user requesting the audit.
+    @param stall       - The location or stall name where the dish is served.
+    @param dish        - The name of the dish being audited.
+    @param restrictions - A dictionary containing the user's dietary restrictions and allergies.
+    @param result_data  - A dictionary containing audit results (stall knowledge, insights, conflicts, tree, etc.).
+    @return None
+    """
+    def display_audit_result(self,username, stall, dish, restrictions, result_data):
+        stall_knowledge = result_data["stall_knowledge"]
+        stall_emoji = "🟢" if stall_knowledge == "Known" else "🟡" if stall_knowledge == "Inferred" else "🔴"
+        """Displays the final processed audit report clearly to the user."""
+        print(f"{utils.DIVIDER}")
+        print("                         DISH SAFETY AUDIT            ")
+        print(f"{utils.DIVIDER}")
+
+        # User and Restrictions section
+        print(f"[USERNAME] {username}")
+        print(f"[USER PROFILE & RESTRICTIONS]")
+        self.print_user_restrictions(restrictions)
+
+        # Stall and Insights Section
+        print(f"[DISH] {dish}")
+        print(f"[LOCATION/STALL] {stall}\n")
+        print(f"[STALL STATUS: {stall_knowledge} {stall_emoji}]")
+        print(f"[Stall Insights]")
+        print(f"{result_data.get('stall_specific_insights')}\n")
+
+        # Risk Assessment Section
+        print(f"{utils.SECTION}")
+        self.print_risk_assessment(result_data)
+        self.print_allergy_conflicts(result_data)
+        print("")
+        self.print_dietary_status(result_data)
+        print("")
+        self.print_cross_contact_risks(result_data)
+        print("")
+
+        # Ingredient Breakdown Section
+        self.print_ingredient_breakdown_tree(result_data)
+
+        print(f"\n{utils.DIVIDER}")
+        print("⚠️  ADVISORY DISCLAIMER: This tool is advisory only.")
+        print("   Always verify with store owners for safety.")
+        print(f"{utils.DIVIDER}")
