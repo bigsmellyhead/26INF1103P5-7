@@ -1,10 +1,11 @@
 from Data import Data
+from EventName import EventName
 from collections.abc import Callable
 class EventBus:
     #Set up callback functions to call when event is triggered
     #Event_list is a dictionary containing events to a list of callback functions
     #that take in one parameter of type Data and return nothing
-    event_list: dict[str, list[Callable[[Data]],None]]
+    event_list: dict[EventName, list[Callable[[Data]],None]]
 
     #Store List of Active Events
     #(event: str, event_data: Data)
@@ -16,7 +17,7 @@ class EventBus:
         self.active_events = []
 
     # Raise Events
-    def raise_event(self, event: str, event_data: Data):
+    def raise_event(self, event: EventName, event_data: Data):
         if event not in self.event_list:
             raise ValueError(f"Event '{event}' is not registered.")
         
@@ -25,7 +26,7 @@ class EventBus:
 
 
     # Subscription of Events
-    def subscribe_event(self, event: str, callback: Callable):
+    def subscribe_event(self, event: EventName, callback: Callable):
         # Event not inside
         if event not in self.event_list:
             self.event_list[event] = [callback]
@@ -43,3 +44,7 @@ class EventBus:
 
             for callback in self.event_list[event]:
                 callback(data)
+
+
+#Global Definiton of Bus
+event_bus = EventBus()

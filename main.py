@@ -8,9 +8,12 @@ from io_manager import (
 from ai_manager import query_ai_safety_auditor
 from logic_manager import validate_and_process_logic
 from data_manager import initialize_database, append_audit_log
+from EventBus import event_bus
 
 
 def main():
+    #Initialise all the managers
+    
     # Initialize MySQL database and create missing tables
     initialize_database()
 
