@@ -16,3 +16,6 @@ class Restriction(ABC):
 
     def __hash__(self):
         return hash(self.name.lower())
+    
+    def __repr__(self): #For Readibility
+        return f"{type(self).__name__}({self.name!r})"
