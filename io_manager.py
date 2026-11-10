@@ -5,6 +5,8 @@ from EventBus import event_bus
 from EventName import EventName
 import utils
 from Data import AttemptErrorData, APIKeyErrorData
+from allergen_catalog import create_restriction
+from allergen_restriction import AllergenRestriction
 
 class IOManager:
     def __init__(self):
@@ -355,6 +357,7 @@ class IOManager:
             if update_choice == 'y':
                 # --- User wants to change their restrictions (menu opens pre-ticked) ---
                 restrictions = self.prompt_for_restrictions(current=user_profile['restrictions'])
+                self.print_severity_summary(self.build_restrictions(restrictions)) # This is to print Severity Summary
 
                 # Overwrite the profile in the JSON database
                 restrictions = group_restrictions(restrictions)
@@ -368,6 +371,7 @@ class IOManager:
             # --- New user: walk them through initial setup ---
             print(f"\nNew user detected ('{username}'). Let's set up your dietary profile.")
             restrictions = self.prompt_for_restrictions()
+            self.print_severity_summary(self.build_restrictions(restrictions)) # This is to print Severity Summary
 
             # Create the profile for the first time
             # Reformat the restrictions to group them according:
@@ -461,3 +465,11 @@ class IOManager:
         print("⚠️  ADVISORY DISCLAIMER: This tool is advisory only.")
         print("   Always verify with store owners for safety.")
         print(f"{utils.DIVIDER}")
+
+    def build_restrictions(self, names): #Takes the list of ticked names and turn each one into a restriction object, turning them into a set.
+        return {create_restriction(n) for n in names if n != "none"}
+
+    def print_severity_summary(self, restrictions): #Check every item passes the check and prints the severity line
+        for r in sorted(restrictions, key=lambda r: r.name):
+            if isinstance(r, AllergenRestriction):
+                print(f"Severity for ({r.name}): {r.severity_level.title()}")
