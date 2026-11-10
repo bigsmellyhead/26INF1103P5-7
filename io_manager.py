@@ -296,6 +296,8 @@ class IOManager:
         menu_entries.append(("Restrictions", "Dietary / religious", DIETARY_RESTRICTIONS))
         other_number = len(menu_entries) + 1
 
+        print(menu_entries)
+
         # Start from whatever the user already has saved (empty for new users)
         selected = {r for r in (current or []) if r != "none"}
 

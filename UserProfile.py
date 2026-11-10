@@ -1,4 +1,4 @@
-from Restriction import Restriction
+from restriction import Restriction
 class UserProfile:
     __username : str
     __restrictions: set[Restriction]
