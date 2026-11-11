@@ -5,6 +5,7 @@ from EventBus import event_bus
 from EventName import EventName
 import utils
 from Data import AttemptErrorData, APIKeyErrorData
+from art import text2art
 
 class IOManager:
     def __init__(self):
@@ -60,10 +61,14 @@ class IOManager:
             case("Low"):
                 CURRENT_COLOR = utils.COLOR_GREEN
 
-        safety_status = "SAFE TO EAT" if result_data.get('is_safe') else "NOT SAFE / AVOID"
-        print(f"{CURRENT_COLOR}Risk Assessment: {result_data.get('risk_score')}% ({result_data.get('risk_level')})")
-        print(f"VERDICT: {safety_status}")
-        print(f"Reasoning:")
+        safety_status = "SAFE TO EAT" if result_data.get('is_safe') else "NOT SAFE OR AVOID"
+        #INSERT ASCII ART
+        text_to_render = f"Risk Assessment: {result_data.get('risk_score')}% ({result_data.get('risk_level')})"
+        art = text2art(text_to_render,font = 'standard', chr_ignore=True)
+        print(f"{CURRENT_COLOR}{art}")
+        art = text2art(f"VERDICT: {safety_status}",font = 'standard', chr_ignore=True)
+        print(art)
+        print(f"Reasoning:", end = " ")
         print(f"{result_data.get('reasoning')}\n    {utils.COLOR_RESET}")
 
     """!
