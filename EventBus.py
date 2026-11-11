@@ -1,15 +1,17 @@
 from Data import Data
 from EventName import EventName
 from collections.abc import Callable
+from typing import Any
+
 class EventBus:
     #Set up callback functions to call when event is triggered
     #Event_list is a dictionary containing events to a list of callback functions
     #that take in one parameter of type Data and return nothing
-    event_list: dict[EventName, list[Callable[[Data]],None]]
+    event_list: dict[EventName, list[Callable[[Any]],None]]
 
     #Store List of Active Events
     #(event: str, event_data: Data)
-    active_events: list[tuple]
+    active_events: list[tuple[EventName, Data]]
 
     #Initialise Bus
     def __init__(self):
@@ -26,7 +28,7 @@ class EventBus:
 
 
     # Subscription of Events
-    def subscribe_event(self, event: EventName, callback: Callable):
+    def subscribe_event(self, event: EventName, callback: Callable[[TData]]):
         # Event not inside
         if event not in self.event_list:
             self.event_list[event] = [callback]

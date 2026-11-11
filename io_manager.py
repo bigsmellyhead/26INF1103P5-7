@@ -4,7 +4,6 @@ from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS
 from EventBus import event_bus
 from EventName import EventName
 import utils
-from Data import AttemptErrorData, APIKeyErrorData
 from art import text2art
 from allergen_catalog import create_restriction
 from allergen_restriction import AllergenRestriction
@@ -12,8 +11,9 @@ from allergen_restriction import AllergenRestriction
 
 class IOManager:
     def __init__(self):
-        event_bus.subscribe_event(EventName.APIKEYERROR, self.display_api_key_error)
-        event_bus.subscribe_event(EventName.ATTEMPTERROR, self.display_attempt_error)
+        #event_bus.subscribe_event(EventName.APIKEYERROR, self.display_api_key_error)
+        #event_bus.subscribe_event(EventName.ATTEMPTERROR, self.display_attempt_error)
+        pass
 
     """!
     @brief   - Prints the structured summary of a user's allergies, dietary restrictions, and other flags.
@@ -418,11 +418,11 @@ class IOManager:
         return stall, dish
 
     # --- AI Error Display Helpers ---
-    def display_api_key_error(self, data : APIKeyErrorData):
+    def display_error(self, data : str):
         #print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
-        print(f"{data.error_msg}")
+        print(f"{data}")
 
-    def display_attempt_error(self, data : AttemptErrorData):
+    def display_attempt_error(self, data : str):
         if not data: raise ValueError("Data is empty")
 
         attempt = data.attempt
