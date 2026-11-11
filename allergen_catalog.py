@@ -54,6 +54,16 @@ SEVERITY_DESCRIPTIONS = {
 
 DEFAULT_SEVERITY = SeverityLevel.HIGH #anything not listed 
 
+CATEGORY_TO_GRP = {
+    "Cereals containing gluten": AllergenGrp.CEREAL,
+    "Crustaceans": AllergenGrp.CRUSTACEANS,
+    "Eggs": AllergenGrp.EGGS,
+    "Fish": AllergenGrp.FISH,
+    "Peanuts & soybeans": AllergenGrp.PEANUTS_AND_SOYBEANS,
+    "Milk & dairy (incl. lactose)": AllergenGrp.MILK_AND_DAIRY,
+    "Tree nuts": AllergenGrp.TREE_NUTS,
+}
+
 ITEM_TO_GRP = {item.lower(): CATEGORY_TO_GRP[cat]
                 for cat, items in ALLERGEN_CATALOG.items() for item in items}
 
@@ -64,7 +74,7 @@ def needs_severity(name):
 def group_restrictions(restrictions, severity=None):
     severity = severity or {}
     ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "severity", "none"}
-    groups = {"allergies": [], "dietary_restrictions": [], "other": [], "severity": []}
+    groups = {"allergies": [], "dietary_restrictions": [], "other": [], "severity": {}}
 
     for item in restrictions:
         key = item.strip().lower()
