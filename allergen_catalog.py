@@ -54,18 +54,44 @@ SEVERITY_DESCRIPTIONS = {
 
 DEFAULT_SEVERITY = SeverityLevel.HIGH #anything not listed 
 
+ITEM_TO_GRP = {item.lower(): CATEGORY_TO_GRP[cat]
+                for cat, items in ALLERGEN_CATALOG.items() for item in items}
+
 def needs_severity(name):
     key = name.strip().lower()
     return bool(key) and key != "none" and key not in KNOWN_DIETARY
 
+def group_restrictions(restrictions, severity=None):
+    severity = severity or {}
+    ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "severity", "none"}
+    groups = {"allergies": [], "dietary_restrictions": [], "other": [], "severity": []}
 
+    for item in restrictions:
+        key = item.strip().lower()
+        if not key or key in ignored_keys:
+            continue
+        if key in KNOWN_ALLERGENS:
+            groups["allergies"].append(key)
+        elif key in KNOWN_DIETARY:
+            groups["dietary_restrictions"].append(key)
+        else:
+            groups["other"].append(key)
 
-def create_restriction(name):
+        # Keep Severity only for items that are actually in the profile
+        for name in groups["allergies"] + groups["other"]:
+            if name in severity:
+                groups["severity"][name] = severity[name]
+
+        return groups    
+
+def create_restriction(name, severity=None):
     key = name.strip().lower() #key meaning the name of the item itself. Eg. Chicken Egg
-    if key in ITEM_TO_GRP:
-        return AllergenRestriction(key, ITEM_TO_GRP[key], severity_of(key))
     if key in KNOWN_DIETARY:
         return DietaryRestriction(key)
-    return OtherRestriction(key)
+
+    level = SeverityLevel(severity) if severity else DEFAULT_SEVERITY
+    if key in ITEM_TO_GRP:
+        return AllergenRestriction(key, ITEM_TO_GRP[key], level)
+    return OtherRestriction(key, level)
 
 
