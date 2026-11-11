@@ -483,10 +483,10 @@ class IOManager:
         print("   Always verify with store owners for safety.")
         print(f"{utils.DIVIDER}")
 
-    def prompt_for_severity(self, names, current=None):
+    def prompt_for_severity(self, names, current=None): #Prompt for Severity Section
             current = current or {}
             severity = {}
-            for name in names:
+            for name in names: #name means the Allergy name itself
                 if not needs_severity(name):
                     continue
                 previous = current.get(name)
@@ -500,7 +500,7 @@ class IOManager:
                         severity[name] = previous
                         break
                     if choice in SEVERITY_ANSWERS:
-                        severity[name] = SEVERITY_ANSWERS[choice]
+                        severity[name] = SEVERITY_ANSWERS[choice] #choice is the user's choice - 1-3, low,med,high
                         break
                     print("Please enter 1,2 or 3.")
             return severity    
