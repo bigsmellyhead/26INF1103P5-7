@@ -46,87 +46,19 @@ def group_restrictions(restrictions):
     return groups
 
 #================Severity Section================
-
-CATEGORY_TO_GRP = {
-    "Cereals containing gluten": AllergenGrp.CEREAL,
-    "Crustaceans": AllergenGrp.CRUSTACEANS,
-    "Eggs": AllergenGrp.EGGS,
-    "Fish": AllergenGrp.FISH,
-    "Peanuts & soybeans": AllergenGrp.PEANUTS_AND_SOYBEANS,
-    "Milk & dairy (incl. lactose)": AllergenGrp.MILK_AND_DAIRY,
-    "Tree nuts": AllergenGrp.TREE_NUTS,
+SEVERITY_DESCRIPTIONS = {
+    SeverityLevel.LOW:  "Discomfort only - bloating, stomach upset, mild itch. Passes on its own.",
+    SeverityLevel.MED:  "Clear reaction - hives, swelling, vomiting. May need medication, not life-threatening.",
+    SeverityLevel.HIGH: "Life-threatening - airway closing, difficulty breathing, anaphylaxis. Even traces are dangerous.",
 }
 
-ITEM_TO_GRP = {item.lower(): CATEGORY_TO_GRP[cat]
-                for cat, items in ALLERGEN_CATALOG.items() for item in items}
+DEFAULT_SEVERITY = SeverityLevel.HIGH #anything not listed 
 
-#PRESETS OF SEVERITY. lowercase names
-SEVERITY_PRESETS = {
-    # Tree nuts: common cause of anaphylaxis
-    "almond": SeverityLevel.HIGH,
-    "brazil nut": SeverityLevel.HIGH,
-    "cashew": SeverityLevel.HIGH,
-    "hazelnut": SeverityLevel.HIGH,
-    "macadamia": SeverityLevel.HIGH,
-    "pecan": SeverityLevel.HIGH,
-    "pine nut": SeverityLevel.HIGH,
-    "pistachio": SeverityLevel.HIGH,
-    "walnut": SeverityLevel.HIGH,
+def needs_severity(name):
+    key = name.strip().lower()
+    return bool(key) and key != "none" and key not in KNOWN_DIETARY
 
-    # Peanut
-    "peanut": SeverityLevel.HIGH,
 
-    # Crustaceans: common cause of anaphylaxis
-    "prawn": SeverityLevel.HIGH,
-    "shrimp": SeverityLevel.HIGH,
-    "crab": SeverityLevel.HIGH,
-    "crayfish": SeverityLevel.HIGH,
-    "lobster": SeverityLevel.HIGH,
-
-    # Fish
-    "salmon": SeverityLevel.HIGH,
-    "tuna": SeverityLevel.HIGH,
-    "cod": SeverityLevel.HIGH,
-    "mackerel": SeverityLevel.HIGH,
-    "sardine": SeverityLevel.HIGH,
-    "anchovy (ikan bilis)": SeverityLevel.HIGH,
-
-    # Eggs
-    "chicken egg": SeverityLevel.HIGH,
-    "duck egg": SeverityLevel.HIGH,
-    "quail egg": SeverityLevel.HIGH,
-
-    # Milk proteins can cause anaphylaxis
-    "milk": SeverityLevel.HIGH,
-    "casein": SeverityLevel.HIGH,
-    "whey": SeverityLevel.HIGH,
-
-    # Dairy products: could be an allergy or an intolerance
-    "butter": SeverityLevel.MED,
-    "cheese": SeverityLevel.MED,
-    "cream": SeverityLevel.MED,
-
-    # Soy: reactions are usually milder
-    "soybean": SeverityLevel.MED,
-    "soy sauce": SeverityLevel.MED,
-    "tofu": SeverityLevel.MED,
-    "tempeh": SeverityLevel.MED,
-
-    # Gluten cereals: mostly digestive or celiac, less often airway
-    "wheat": SeverityLevel.MED,
-    "rye": SeverityLevel.MED,
-    "barley": SeverityLevel.MED,
-    "oats": SeverityLevel.MED,
-    "spelt": SeverityLevel.MED,
-    "kamut": SeverityLevel.MED,
-
-    # Intolerance, not an allergy
-    "lactose": SeverityLevel.LOW,
-}
-DEFAULT_SEVERITY = SeverityLevel.MED #anything not listed above. TO FIX ################################:3
-
-def severity_of(name):
-    return SEVERITY_PRESETS.get(name.strip().lower(), DEFAULT_SEVERITY)
 
 def create_restriction(name):
     key = name.strip().lower() #key meaning the name of the item itself. Eg. Chicken Egg
