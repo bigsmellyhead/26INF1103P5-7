@@ -7,6 +7,11 @@ import utils
 from Data import AttemptErrorData, APIKeyErrorData
 from allergen_catalog import create_restriction
 from allergen_restriction import AllergenRestriction
+from allergen_catalog import create_restriction, needs_severity, SEVERITY_DESCRIPTIONS
+
+SEVERITY_ANSWERS = {"1": "LOW", "L": "LOW", "LOW": "LOW",
+                    "2": "MED", "M": "MED", "MED": "MED",
+                    "3": "HIGH", "H": "HIGH", "HIGH": "HIGH"}
 
 class IOManager:
     def __init__(self):
@@ -324,7 +329,7 @@ class IOManager:
 
     def flatten_restrictions(self, restrictions):
         if isinstance(restrictions, dict):
-            return [item for items in restrictions.values() for item in items]
+            return [item for key in ("allergies", "dietary_restrictions", "other")for item in restrictions.get(key, [])]
         return [item for item in restrictions if item != "none"]
 
 
@@ -364,10 +369,11 @@ class IOManager:
             if update_choice == 'y':
                 # --- User wants to change their restrictions (menu opens pre-ticked) ---
                 names = self.prompt_for_restrictions(current=saved_names)
-                self.print_severity_summary(self.build_restrictions(names)) # This is to print Severity Summary
+                severity = self.prompt_for_severity(names, current=user_profile['restrictions'].get("severity", {}))
+                self.print_severity_summary(self.build_restrictions(names, severity)) # This is to print Severity Summary
 
                 # Overwrite the profile in the JSON database
-                restrictions = group_restrictions(names)
+                restrictions = group_restrictions(names, severity)
                 save_user_profile(username, restrictions)
 
                 saved = [n for n in names if n != "none"]
@@ -380,14 +386,15 @@ class IOManager:
             # --- New user: walk them through initial setup ---
             print(f"\nNew user detected ('{username}'). Let's set up your dietary profile.")
             names = self.prompt_for_restrictions()
-            self.print_severity_summary(self.build_restrictions(names)) # This is to print Severity Summary
+            severity = self.prompt_for_severity(names)
+            self.print_severity_summary(self.build_restrictions(names, severity)) # This is to print Severity Summary
 
             # Create the profile for the first time
             # Reformat the restrictions to group them according:
             # Allergens
             # Dietary Restrictions
             # Others
-            restrictions = group_restrictions(names)
+            restrictions = group_restrictions(names, severity)
 
             ## Save to database
             save_user_profile(username, restrictions)
@@ -476,10 +483,34 @@ class IOManager:
         print("   Always verify with store owners for safety.")
         print(f"{utils.DIVIDER}")
 
-    def build_restrictions(self, names): #Takes the list of ticked names and turn each one into a restriction object, turning them into a set.
-        return {create_restriction(n) for n in names if n != "none"}
+    def prompt_for_severity(self, names, current=None):
+            current = current or {}
+            severity = {}
+            for name in names:
+                if not needs_severity(name):
+                    continue
+                previous = current.get(name)
+                print(f"\nHow severely does ({name}) affect you?")
+                for number, (level, text) in enumerate(SEVERITY_DESCRIPTIONS.items(), start=1):
+                    print(f"    {number}. {level:<4} - {text}")
+                hint = f"   (Enter = keep {previous})" if previous else ""
+                while True:
+                    choice = input(f"Your choice 1-3{hint}: ").strip().upper()
+                    if not choice and previous:
+                        severity[name] = previous
+                        break
+                    if choice in SEVERITY_ANSWERS:
+                        severity[name] = SEVERITY_ANSWERS[choice]
+                        break
+                    print("Please enter 1,2 or 3.")
+            return severity    
+
+    def build_restrictions(self, names, severity): #Takes the list of ticked names and turn each one into a restriction object, turning them into a set.
+        return {create_restriction(n, severity.get(n)) for n in names if n != "none"}
 
     def print_severity_summary(self, restrictions): #Check every item passes the check and prints the severity line
         for r in sorted(restrictions, key=lambda r: r.name):
-            if isinstance(r, AllergenRestriction):
-                print(f"Severity for ({r.name}): {r.severity_level.title()}")
+            level = getattr(r, "severity_level", None)
+            if level:
+                print(f"Severity for ({r.name}): {level.title()}")
+
