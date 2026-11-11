@@ -322,6 +322,12 @@ class IOManager:
 
         return sorted(selected) if selected else ["none"]
 
+    def flatten_restrictions(self, restrictions):
+        if isinstance(restrictions, dict):
+            return [item for items in restrictions.values() for item in items]
+        return [item for item in restrictions if item != "none"]
+
+
     # Input handling for user authentication
     def handle_user_authentication(self):
         """Handles existing user check, profile editing, or new user registration."""
@@ -344,8 +350,9 @@ class IOManager:
 
         if user_profile:
             # --- Existing user: show their saved data ---
+            saved_names = self.flatten_restrictions(user_profile['restrictions'])
             print(f"\nWelcome back, {user_profile['username']}!")
-            print(f"Current saved restrictions: {', '.join(user_profile['restrictions'])}\n")
+            print(f"Current saved restrictions: {', '.join(saved_names) or 'none'}\n")
 
             # Loop until the user gives a valid y/n answer
             while True:
@@ -356,13 +363,15 @@ class IOManager:
 
             if update_choice == 'y':
                 # --- User wants to change their restrictions (menu opens pre-ticked) ---
-                restrictions = self.prompt_for_restrictions(current=user_profile['restrictions'])
-                self.print_severity_summary(self.build_restrictions(restrictions)) # This is to print Severity Summary
+                names = self.prompt_for_restrictions(current=saved_names)
+                self.print_severity_summary(self.build_restrictions(names)) # This is to print Severity Summary
 
                 # Overwrite the profile in the JSON database
-                restrictions = group_restrictions(restrictions)
+                restrictions = group_restrictions(names)
                 save_user_profile(username, restrictions)
-                print(f"\nProfile updated! Saved {len(restrictions)} restriction(s): {', '.join(restrictions)}")
+
+                saved = [n for n in names if n != "none"]
+                print(f"\nProfile updated! Saved {len(saved)} restriction(s): {', '.join(saved) or 'none'}")
             else:
                 # --- User declined to update: keep existing restrictions as-is ---
                 print("No updates made.")
@@ -370,19 +379,20 @@ class IOManager:
         else:
             # --- New user: walk them through initial setup ---
             print(f"\nNew user detected ('{username}'). Let's set up your dietary profile.")
-            restrictions = self.prompt_for_restrictions()
-            self.print_severity_summary(self.build_restrictions(restrictions)) # This is to print Severity Summary
+            names = self.prompt_for_restrictions()
+            self.print_severity_summary(self.build_restrictions(names)) # This is to print Severity Summary
 
             # Create the profile for the first time
             # Reformat the restrictions to group them according:
             # Allergens
             # Dietary Restrictions
             # Others
-            restrictions = group_restrictions(restrictions)
+            restrictions = group_restrictions(names)
 
             ## Save to database
             save_user_profile(username, restrictions)
-            print(f"\nProfile saved for {username}! Saved {len(restrictions)} restriction(s): {', '.join(restrictions)}")
+            saved = [n for n in names if n != "none"]
+            print(f"\nProfile saved for {username}! Saved {len(saved)} restriction(s): {', '.join(restrictions)}")
 
         # Hand back the username and their current (possibly just-updated) restrictions
         return username, restrictions
