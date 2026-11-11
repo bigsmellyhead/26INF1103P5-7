@@ -134,6 +134,6 @@ def create_restriction(name):
         return AllergenRestriction(key, ITEM_TO_GRP[key], severity_of(key))
     if key in KNOWN_DIETARY:
         return DietaryRestriction(key)
-    return OtherRestriction
+    return OtherRestriction(key)
 
 
