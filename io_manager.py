@@ -1,19 +1,23 @@
 # io_manager.py
-from data_manager import get_user_profile, save_user_profile
 from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS , group_restrictions
 from EventBus import event_bus
 from EventName import EventName
 import utils
 from art import text2art
 from allergen_catalog import create_restriction
+from collections.abc import Callable
 from allergen_restriction import AllergenRestriction
+from Data import ResultAuditData
 
 
 class IOManager:
-    def __init__(self):
-        #event_bus.subscribe_event(EventName.APIKEYERROR, self.display_api_key_error)
-        #event_bus.subscribe_event(EventName.ATTEMPTERROR, self.display_attempt_error)
-        pass
+
+    __load_data : Callable
+    __save_data : Callable
+
+    def __init__(self, load_data: Callable, save_data: Callable):
+        self.__load_data = load_data
+        self.__save_data = save_data
 
     """!
     @brief   - Prints the structured summary of a user's allergies, dietary restrictions, and other flags.
@@ -52,7 +56,7 @@ class IOManager:
     @note - Utilizes local ANSI constants (`COLOR_RED`, `COLOR_YELLOW`, `COLOR_GREEN`, `COLOR_RESET`) to output color metrics into the terminal interface.
     @return None
     """
-    def print_risk_assessment(self, result_data):
+    def print_risk_assessment(self, result_data: dict):
         # ANSI Colour definitions
         CURRENT_COLOR = ""
         #Analyse Risk Score and assign color codes based on risk score
@@ -64,13 +68,13 @@ class IOManager:
             case("Low"):
                 CURRENT_COLOR = utils.COLOR_GREEN
 
-        safety_status = "SAFE TO EAT" if result_data.get('is_safe') else "NOT SAFE OR AVOID"
+        safety_status = "SAFE TO EAT" if result_data.get('is_safe') else "NOT SAFE / AVOID"
         #INSERT ASCII ART
         text_to_render = f"Risk Assessment: {result_data.get('risk_score')}% ({result_data.get('risk_level')})"
-        art = text2art(text_to_render,font = 'standard', chr_ignore=True)
+        art = text2art(text_to_render,font = 'small', chr_ignore=True)
         print(f"{CURRENT_COLOR}{art}")
-        art = text2art(f"VERDICT: {safety_status}",font = 'standard', chr_ignore=True)
-        print(art)
+        art_2 = text2art(f"VERDICT: {safety_status}",font = 'small', chr_ignore=True)
+        print(art_2)
         print(f"Reasoning:", end = " ")
         print(f"{result_data.get('reasoning')}\n    {utils.COLOR_RESET}")
 
@@ -352,7 +356,7 @@ class IOManager:
             username = "guest"
 
         # Look up this username in the saved profiles (returns None if new)
-        user_profile = get_user_profile(username)
+        user_profile = self.__load_data(username)
 
         if user_profile:
             # --- Existing user: show their saved data ---
@@ -374,7 +378,7 @@ class IOManager:
 
                 # Overwrite the profile in the JSON database
                 restrictions = group_restrictions(names)
-                save_user_profile(username, restrictions)
+                self.__save_data(username, restrictions)
 
                 saved = [n for n in names if n != "none"]
                 print(f"\nProfile updated! Saved {len(saved)} restriction(s): {', '.join(saved) or 'none'}")
@@ -396,7 +400,7 @@ class IOManager:
             restrictions = group_restrictions(names)
 
             ## Save to database
-            save_user_profile(username, restrictions)
+            self.__save_data(username, restrictions)
             saved = [n for n in names if n != "none"]
             print(f"\nProfile saved for {username}! Saved {len(saved)} restriction(s): {', '.join(restrictions)}")
 
@@ -420,7 +424,7 @@ class IOManager:
     # --- AI Error Display Helpers ---
     def display_error(self, data : str):
         #print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
-        print(f"{data}")
+        print(data)
 
     def display_attempt_error(self, data : str):
         if not data: raise ValueError("Data is empty")
@@ -444,38 +448,39 @@ class IOManager:
     @param result_data  - A dictionary containing audit results (stall knowledge, insights, conflicts, tree, etc.).
     @return None
     """
-    def display_audit_result(self,username, stall, dish, restrictions, result_data):
-        stall_knowledge = result_data["stall_knowledge"]
-        stall_emoji = "🟢" if stall_knowledge == "Known" else "🟡" if stall_knowledge == "Inferred" else "🔴"
+    def display_audit_result(self, data: ResultAuditData):
         """Displays the final processed audit report clearly to the user."""
+        stall_knowledge = data.result["stall_knowledge"]
+        stall_emoji = "🟢" if stall_knowledge == "Known" else "🟡" if stall_knowledge == "Inferred" else "🔴"
+        
         print(f"{utils.DIVIDER}")
         print("                         DISH SAFETY AUDIT            ")
         print(f"{utils.DIVIDER}")
 
         # User and Restrictions section
-        print(f"[USERNAME] {username}")
+        print(f"[USERNAME] {data.user_profile.username}")
         print(f"[USER PROFILE & RESTRICTIONS]")
-        self.print_user_restrictions(restrictions)
+        self.print_user_restrictions(data.user_profile.restrictions)
 
         # Stall and Insights Section
-        print(f"[DISH] {dish}")
-        print(f"[LOCATION/STALL] {stall}\n")
+        print(f"[DISH] {data.dish}")
+        print(f"[LOCATION/STALL] {data.stall}\n")
         print(f"[STALL STATUS: {stall_knowledge} {stall_emoji}]")
         print(f"[Stall Insights]")
-        print(f"{result_data.get('stall_specific_insights')}\n")
+        print(f"{data.result.get('stall_specific_insights')}\n")
 
         # Risk Assessment Section
         print(f"{utils.SECTION}")
-        self.print_risk_assessment(result_data)
-        self.print_allergy_conflicts(result_data)
+        self.print_risk_assessment(data.result)
+        self.print_allergy_conflicts(data.result)
         print("")
-        self.print_dietary_status(result_data)
+        self.print_dietary_status(data.result)
         print("")
-        self.print_cross_contact_risks(result_data)
+        self.print_cross_contact_risks(data.result)
         print("")
 
         # Ingredient Breakdown Section
-        self.print_ingredient_breakdown_tree(result_data)
+        self.print_ingredient_breakdown_tree(data.result)
 
         print(f"\n{utils.DIVIDER}")
         print("⚠️  ADVISORY DISCLAIMER: This tool is advisory only.")

@@ -1,12 +1,6 @@
 # Data.py
 from abc import ABC, abstractmethod
 from UserProfile import UserProfile
-
-# # Base class for everything sent through the Bus
-# # It cannot be created directly: every payload must be able to turn itself into a dictionary
-# class Data(ABC):
-#     pass
-
 # ==========================================
 # AUDIT DATA BRANCH
 # ==========================================
@@ -42,7 +36,7 @@ class BaseAuditData():
         }
 
 # Sent by AIManager to LogicManager: the AI's validated reply plus what logic needs to build the final record
-class ExtendedAuditData(BaseAuditData):
+class AIAuditData(BaseAuditData):
     _ai_result: dict
 
     def __init__(self, user_profile: UserProfile, stall: str, dish: str, ai_result: dict,):
@@ -62,10 +56,10 @@ class ExtendedAuditData(BaseAuditData):
 
 
 # Sent by LogicManager once the rules have been applied; used for displaying and saving the audit
-class AuditResultData(BaseAuditData):
+class ResultAuditData(BaseAuditData):
     _result: dict
 
-    def __init__(self, result: dict, user_profile: UserProfile, stall: str, dish: str):
+    def __init__(self, user_profile: UserProfile, stall: str, dish: str, result: dict):
         super().__init__(user_profile, stall, dish)
         self._result = result
 

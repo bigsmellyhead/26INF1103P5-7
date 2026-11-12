@@ -3,16 +3,18 @@ import json
 import time
 import logging
 
-from EventName import EventName
-from Data import APIKeyErrorData, AttemptErrorData
 from output_schema import OutputSchema
 from schema_validator import SchemaValidator
 from prompt_builder import PromptBuilder
 from gemini_client import GeminiClient
+from collections.abc import Callable
 
 class AIManager:
-    def __init__(self, bus):
-        self._bus = bus
+    __print_error: Callable
+
+    def __init__(self, print_error: Callable):
+        self.__print_error = print_error
+
 
         # Configure logging to save logs to api.logs, filemode 'a' to allow appending of new logs
         # ERROR level are logged, in the format of date/time, level, message...
@@ -39,11 +41,7 @@ class AIManager:
         if not self._client.has_api_key():
             # error will be logged to api.logs
             logging.error("GEMINI_API_KEY is not set")
-            # IOManager is subscribed to this event and displays the message
-            self._bus.raise_event(
-                EventName.APIKEYERROR,
-                APIKeyErrorData("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
-            )
+            self.__print_error("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
             return None
 
         # calls build_user_message method to wrap sanitised user data in tags
@@ -65,8 +63,10 @@ class AIManager:
                 # error will be logged to api.logs
                 logging.error(f"Attempt {attempt}/{self._max_tries}:API has error: {error} ")
                 # IOManager is subscribed to this event and displays the message
-                self._bus.raise_event(EventName.ATTEMPTERROR, AttemptErrorData(attempt, self._max_tries, error))
+                error_msg = f"[AI Manager] Attempt {attempt}/{self._max_tries} failed: {error}"
+                self.__print_error(error_msg)
                 if attempt < self._max_tries:
                     time.sleep(2 * attempt)   # wait 2s after the 1st failure, 4s after the 2nd
+                
 
         return None

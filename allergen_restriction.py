@@ -1,6 +1,6 @@
 from allergen_grp import AllergenGrp
 from severity_level import SeverityLevel
-from Restriction import Restriction
+from restriction import Restriction
 class AllergenRestriction(Restriction):
     __allergen_grp: AllergenGrp
     __severity_level: SeverityLevel

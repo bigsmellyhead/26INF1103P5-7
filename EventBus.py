@@ -1,4 +1,3 @@
-from Data import Data
 from EventName import EventName
 from collections.abc import Callable
 from typing import Any
@@ -11,15 +10,15 @@ class EventBus:
 
     #Store List of Active Events
     #(event: str, event_data: Data)
-    active_events: list[tuple[EventName, Data]]
+    #active_events: list[tuple[EventName, Data]]
 
     #Initialise Bus
     def __init__(self):
         self.event_list = {}
-        self.active_events = []
+        #self.active_events = []
 
     # Raise Events
-    def raise_event(self, event: EventName, event_data: Data):
+    def raise_event(self, event: EventName, event_data: str):
         if event not in self.event_list:
             raise ValueError(f"Event '{event}' is not registered.")
         
@@ -28,7 +27,7 @@ class EventBus:
 
 
     # Subscription of Events
-    def subscribe_event(self, event: EventName, callback: Callable[[TData]]):
+    def subscribe_event(self, event: EventName, callback: Callable[[str]]):
         # Event not inside
         if event not in self.event_list:
             self.event_list[event] = [callback]
