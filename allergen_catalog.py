@@ -88,11 +88,11 @@ def group_restrictions(restrictions, severity=None): #Sorts a flat list of names
             groups["other"].append(key)                # custom. typed in by the user
 
         # Keep Severity only for items that are actually in the profile
-        for name in groups["allergies"] + groups["other"]:
-            if name in severity:
-                groups["severity"][name] = severity[name]
+    for name in groups["allergies"] + groups["other"]:
+        if name in severity:
+            groups["severity"][name] = severity[name]
 
-        return groups    
+    return groups    
 
 def create_restriction(name, severity=None):
     key = name.strip().lower() #key meaning the name of the item itself. Eg. Chicken Egg

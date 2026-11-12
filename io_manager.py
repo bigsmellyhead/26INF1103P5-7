@@ -408,7 +408,7 @@ class IOManager:
             ## Save to database
             self.__save_data(username, restrictions)
             saved = [n for n in names if n != "none"]
-            print(f"\nProfile saved for {username}! Saved {len(saved)} restriction(s): {', '.join(restrictions)}")
+            print(f"\nProfile saved for {username}! Saved {len(saved)} restriction(s): {', '.join(saved) or 'none'}")
 
         # Hand back the username and their current (possibly just-updated) restrictions
         return username, restrictions
