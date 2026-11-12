@@ -46,6 +46,13 @@ def group_restrictions(restrictions):
     return groups
 
 #================Severity Section================
+SEVERITY_DESCRIPTIONS = {
+    SeverityLevel.LOW:  "Discomfort only - bloating, stomach upset, mild itch. Passes on its own.",
+    SeverityLevel.MED:  "Clear reaction - hives, swelling, vomiting. May need medication, not life-threatening.",
+    SeverityLevel.HIGH: "Life-threatening - airway closing, difficulty breathing, anaphylaxis. Even traces are dangerous.",
+}
+
+DEFAULT_SEVERITY = SeverityLevel.HIGH #anything not listed 
 
 CATEGORY_TO_GRP = {
     "Cereals containing gluten": AllergenGrp.CEREAL,
@@ -58,82 +65,43 @@ CATEGORY_TO_GRP = {
 }
 
 ITEM_TO_GRP = {item.lower(): CATEGORY_TO_GRP[cat]
-                for cat, items in ALLERGEN_CATALOG.items() for item in items}
+                for cat, items in ALLERGEN_CATALOG.items() for item in items} # look up table; each catalog item, see if the allergen grp belongs to eg. "chicken eggs", etc
 
-#PRESETS OF SEVERITY. lowercase names
-SEVERITY_PRESETS = {
-    # Tree nuts: common cause of anaphylaxis
-    "almond": SeverityLevel.HIGH,
-    "brazil nut": SeverityLevel.HIGH,
-    "cashew": SeverityLevel.HIGH,
-    "hazelnut": SeverityLevel.HIGH,
-    "macadamia": SeverityLevel.HIGH,
-    "pecan": SeverityLevel.HIGH,
-    "pine nut": SeverityLevel.HIGH,
-    "pistachio": SeverityLevel.HIGH,
-    "walnut": SeverityLevel.HIGH,
+def needs_severity(name): # Decides whether to ask the "How severely does this affect you?" question
+    key = name.strip().lower()
+    return bool(key) and key != "none" and key not in KNOWN_DIETARY
 
-    # Peanut
-    "peanut": SeverityLevel.HIGH,
+def group_restrictions(restrictions, severity=None): #Sorts a flat list of names into the dictionary that gets saved to the database
+    severity = severity or {}
+    ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "severity", "none"} #skipped
+    groups = {"allergies": [], "dietary_restrictions": [], "other": [], "severity": {}} 
 
-    # Crustaceans: common cause of anaphylaxis
-    "prawn": SeverityLevel.HIGH,
-    "shrimp": SeverityLevel.HIGH,
-    "crab": SeverityLevel.HIGH,
-    "crayfish": SeverityLevel.HIGH,
-    "lobster": SeverityLevel.HIGH,
+    for item in restrictions: #To put every name into the right list
+        key = item.strip().lower()
+        if not key or key in ignored_keys:
+            continue                                   #skip blanks and label words
+        if key in KNOWN_ALLERGENS:
+            groups["allergies"].append(key)            # in the allergen catalog
+        elif key in KNOWN_DIETARY:
+            groups["dietary_restrictions"].append(key) # halal, vegan, etc.
+        else:
+            groups["other"].append(key)                # custom. typed in by the user
 
-    # Fish
-    "salmon": SeverityLevel.HIGH,
-    "tuna": SeverityLevel.HIGH,
-    "cod": SeverityLevel.HIGH,
-    "mackerel": SeverityLevel.HIGH,
-    "sardine": SeverityLevel.HIGH,
-    "anchovy (ikan bilis)": SeverityLevel.HIGH,
+        # Keep Severity only for items that are actually in the profile
+        for name in groups["allergies"] + groups["other"]:
+            if name in severity:
+                groups["severity"][name] = severity[name]
 
-    # Eggs
-    "chicken egg": SeverityLevel.HIGH,
-    "duck egg": SeverityLevel.HIGH,
-    "quail egg": SeverityLevel.HIGH,
+        return groups    
 
-    # Milk proteins can cause anaphylaxis
-    "milk": SeverityLevel.HIGH,
-    "casein": SeverityLevel.HIGH,
-    "whey": SeverityLevel.HIGH,
-
-    # Dairy products: could be an allergy or an intolerance
-    "butter": SeverityLevel.MED,
-    "cheese": SeverityLevel.MED,
-    "cream": SeverityLevel.MED,
-
-    # Soy: reactions are usually milder
-    "soybean": SeverityLevel.MED,
-    "soy sauce": SeverityLevel.MED,
-    "tofu": SeverityLevel.MED,
-    "tempeh": SeverityLevel.MED,
-
-    # Gluten cereals: mostly digestive or celiac, less often airway
-    "wheat": SeverityLevel.MED,
-    "rye": SeverityLevel.MED,
-    "barley": SeverityLevel.MED,
-    "oats": SeverityLevel.MED,
-    "spelt": SeverityLevel.MED,
-    "kamut": SeverityLevel.MED,
-
-    # Intolerance, not an allergy
-    "lactose": SeverityLevel.LOW,
-}
-DEFAULT_SEVERITY = SeverityLevel.MED #anything not listed above. TO FIX ################################:3
-
-def severity_of(name):
-    return SEVERITY_PRESETS.get(name.strip().lower(), DEFAULT_SEVERITY)
-
-def create_restriction(name):
+def create_restriction(name, severity=None):
     key = name.strip().lower() #key meaning the name of the item itself. Eg. Chicken Egg
-    if key in ITEM_TO_GRP:
-        return AllergenRestriction(key, ITEM_TO_GRP[key], severity_of(key))
     if key in KNOWN_DIETARY:
         return DietaryRestriction(key)
-    return OtherRestriction(key)
+
+    level = SeverityLevel(severity) if severity else DEFAULT_SEVERITY #If no severity was given (e.g. an old profile), fall back to DEFAULT_SEVERITY
+    if key in ITEM_TO_GRP:
+        return AllergenRestriction(key, ITEM_TO_GRP[key], level)
+    return OtherRestriction(key, level)
 
 
