@@ -1,5 +1,5 @@
 
-from Restriction import Restriction
+from restriction import Restriction
 from severity_level import SeverityLevel
 
 class OtherRestriction(Restriction):

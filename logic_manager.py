@@ -8,7 +8,6 @@ from ingredient_tree_processor import IngredientTreeProcessor
 # Expects: risk_score, stall_knowledge, dietary_status (dict), allergy_conflicts, cross_contact_risks, ingredient_tree.
 # Adds: "flags", a list of reasons whenever a rule changed or questioned the AI's verdict.
 
-
 class LogicManager:
 
     def __init__(self):

@@ -18,6 +18,7 @@ def main():
     data_manager.initialize_database()
 
     # Authenticate or register user profile
+    # Should return user profile object
     username, restrictions = io_manager.handle_user_authentication()
     audit_results = []
 
@@ -32,6 +33,7 @@ def main():
             print("\nProcessing audit with AI reasoning engine...")
 
             # Query LLM API
+            # Can change ai_output to product an AIAUDITDATA
             ai_output = ai_manager.query_ai_safety_auditor(
                 stall, dish, restrictions
             )

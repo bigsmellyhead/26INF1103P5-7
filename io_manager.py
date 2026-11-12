@@ -10,9 +10,7 @@ from allergen_restriction import AllergenRestriction
 from Data import ResultAuditData
 from allergen_catalog import create_restriction, needs_severity, SEVERITY_DESCRIPTIONS
 
-SEVERITY_ANSWERS = {"1": "LOW", "L": "LOW", "LOW": "LOW",
-                    "2": "MED", "M": "MED", "MED": "MED",
-                    "3": "HIGH", "H": "HIGH", "HIGH": "HIGH"}
+
 
 class IOManager:
 
@@ -38,7 +36,7 @@ class IOManager:
         categories = [
             ("allergies", "Allergies"),
             ("dietary_restrictions", "Dietary Restrictions"),
-            ("others", "Others")
+            ("other", "Other")
         ]
         for key, label in categories:
             items = restrictions.get(key, [])
@@ -509,8 +507,8 @@ class IOManager:
                     if not choice and previous:
                         severity[name] = previous
                         break
-                    if choice in SEVERITY_ANSWERS:
-                        severity[name] = SEVERITY_ANSWERS[choice] #choice is the user's choice - 1-3, low,med,high
+                    if choice in utils.SEVERITY_ANSWERS:
+                        severity[name] = utils.SEVERITY_ANSWERS[choice] #choice is the user's choice - 1-3, low,med,high
                         break
                     print("Please enter 1,2 or 3.")
             return severity    
