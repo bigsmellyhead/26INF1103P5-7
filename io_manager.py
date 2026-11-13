@@ -235,43 +235,43 @@ class IOManager:
         self.__audit_renderer.render_sections(data)
 
     def prompt_for_severity(self, names, current=None): #Prompt for Severity Section
-            current = current or {}
-            severity = {}
+        current = current or {}
+        severity = {}
 
-            already_rated = [name for name in names if needs_severity(name) and name in current]
-            change_saved = False
-            if already_rated:
-                print(f"\nYou already have severity level saved for: {', '.join(already_rated)}")
-                while True:
-                    answer = input("Would you like to change any of them? (y/n): ").strip().lower()
-                    if answer in ['y', 'n']:
-                        break
-                    print("Please enter only 'y or 'n'.")
-                change_saved = (answer == 'y')
+        already_rated = [name for name in names if needs_severity(name) and name in current]
+        change_saved = False
+        if already_rated:
+            print(f"\nYou already have severity level saved for: {', '.join(already_rated)}")
+            while True:
+                answer = input("Would you like to change any of them? (y/n): ").strip().lower()
+                if answer in ['y', 'n']:
+                    break
+                print("Please enter only 'y' or 'n'.")
+            change_saved = (answer == 'y')
 
-            for name in names: #name means the Allergy name itself
-                if not needs_severity(name):
-                    continue
-                previous = current.get(name)
+        for name in names: #name means the Allergy name itself
+            if not needs_severity(name):
+                continue
+            previous = current.get(name)
 
-                if previous and not change_saved:
+            if previous and not change_saved:
+                severity[name] = previous
+                continue
+
+            print(f"\nHow severely does ({name}) affect you?")
+            for number, (level, text) in enumerate(SEVERITY_DESCRIPTIONS.items(), start=1):
+                print(f"    {number}. {level:<4} - {text}")
+            hint = f"   (Enter = keep {previous})" if previous else ""
+            while True:
+                choice = input(f"Your choice 1-3{hint}: ").strip().upper()
+                if not choice and previous:
                     severity[name] = previous
-                    continue
-
-                print(f"\nHow severely does ({name}) affect you?")
-                for number, (level, text) in enumerate(SEVERITY_DESCRIPTIONS.items(), start=1):
-                    print(f"    {number}. {level:<4} - {text}")
-                hint = f"   (Enter = keep {previous})" if previous else ""
-                while True:
-                    choice = input(f"Your choice 1-3{hint}: ").strip().upper()
-                    if not choice and previous:
-                        severity[name] = previous
-                        break
-                    if choice in utils.SEVERITY_ANSWERS:
-                        severity[name] = utils.SEVERITY_ANSWERS[choice] #choice is the user's choice - 1-3, low,med,high
-                        break
-                    print("Please enter 1,2 or 3.")
-            return severity    
+                    break
+                if choice in utils.SEVERITY_ANSWERS:
+                    severity[name] = utils.SEVERITY_ANSWERS[choice] #choice is the user's choice - 1-3, low,med,high
+                    break
+                print("Please enter 1,2 or 3.")
+        return severity    
     
     def build_restrictions(self, names, severity): #Takes the list of ticked names and turn each one into a restriction object, turning them into a set.
         return {create_restriction(n, severity.get(n)) for n in names if n != "none"}
