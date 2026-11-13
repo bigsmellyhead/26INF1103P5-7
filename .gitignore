@@ -1,7 +1,1 @@
-audit_history.json
-.env
-__pycache__/
-*.pyc
-.pytest_cache/
-.venv/
-venv/
+git rm -r --cached __pycache__
