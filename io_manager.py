@@ -1,5 +1,6 @@
 # io_manager.py
-from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS , group_restrictions
+from allergen_catalog import group_restrictions
+from restriction_menu import RestrictionMenu
 import utils
 from art import text2art
 from allergen_catalog import create_restriction
@@ -35,54 +36,37 @@ class IOManager:
             ]
         )
 
+    # ================= Restriction Menu (display + input only) =================
 
-    # Input handling for restrictions
-    def parse_restrictions(self, raw_text):
-        # --- Spliting of Allergies / Restrictions by commas "," ---
-        """Split comma-separated input into a clean list. Returns ['none'] if empty."""
-        items = [r.strip().lower() for r in raw_text.split(",") if r.strip()]
-        return items if items else ["none"]
-
-    def parse_number_list(self, raw_text, max_value):
-        # --- Turns "1, 3 4" into [1, 3, 4]. Returns None if anything is invalid ---
-        parts = raw_text.replace(",", " ").split()
-        if not parts or not all(p.isdigit() for p in parts):
-            return None
-        numbers = [int(p) for p in parts]
-        if any(n < 1 or n > max_value for n in numbers):
-            return None
-        return numbers
-
-    def show_category_menu(self, menu_entries, selected, custom_items):
+    def show_category_menu(self, menu: RestrictionMenu):
         # --- Level 1: Allergies first, then Restrictions, then Other ---
-        # menu_entries is a list of (group, title, items) tuples
         print(f"\n{utils.SECTION}")
         print(" SELECT YOUR ALLERGIES / RESTRICTIONS")
         print(utils.SECTION)
 
         last_group = None
-        for number, (group, title, items) in enumerate(menu_entries, start=1):
+        for number, (group, title, items) in enumerate(menu.entries, start=1):
             # Print a group header (ALLERGIES / RESTRICTIONS) whenever the group changes
             if group != last_group:
                 print(f"\n  {group.upper()}")
                 last_group = group
 
-            ticked = sum(1 for item in items if item.lower() in selected)
+            ticked = menu.count_selected(items)
             tag = f"  ({ticked} selected)" if ticked else ""
             print(f"    {number}. {title}{tag}")
 
-        ticked_custom = sum(1 for item in custom_items if item in selected)
+        ticked_custom = menu.count_selected(menu.custom_items)
         tag = f"  ({ticked_custom} selected)" if ticked_custom else ""
         print("\n  OTHER")
-        print(f"    {len(menu_entries) + 1}. Other (type your own){tag}")
+        print(f"    {menu.other_number}. Other (type your own){tag}")
 
         print("\n  Enter a number to open it.")
         print("  D = Done    C = Clear everything")
-        print(f"\nCurrently selected: {', '.join(sorted(selected)) if selected else 'none'}")
+        print(f"\nCurrently selected: {', '.join(menu.selected_names()) or 'none'}")
 
-    def run_item_menu(self, title, items, selected, allow_custom=False):
+    def run_item_menu(self, menu: RestrictionMenu, title, items, allow_custom=False):
         # --- Level 2: tick / untick specific allergens inside one category ---
-        # `selected` (a set) and `items` (a list) are edited in place.
+        # The menu object remembers what is ticked. This method only draws and reads the answer.
         while True:
             print(f"\n{utils.SECTION}")
             print(f" {title}")
@@ -91,7 +75,7 @@ class IOManager:
             if not items:
                 print("  (nothing here yet)")
             for number, item in enumerate(items, start=1):
-                mark = "x" if item.lower() in selected else " "
+                mark = "x" if menu.is_selected(item) else " "
                 print(f"  {number}. [{mark}] {item}")
 
             print("\n  Enter numbers to tick/untick (e.g. 1,3)")
@@ -106,67 +90,45 @@ class IOManager:
             if choice == "b":
                 return
             elif choice == "a":
-                selected.update(item.lower() for item in items)
+                menu.select_all(items)
             elif choice == "n":
-                selected.difference_update(item.lower() for item in items)
+                menu.select_none(items)
             elif choice == "t" and allow_custom:
-                raw = input(utils.CUSTOM_PROMPT)
-                for new_item in self.parse_restrictions(raw):
-                    if new_item == "none":
-                        continue
-                    if new_item not in items:
-                        items.append(new_item)
-                    selected.add(new_item)
+                menu.add_custom(input(utils.CUSTOM_PROMPT))
             else:
-                numbers = self.parse_number_list(choice, len(items))
+                numbers = menu.parse_numbers(choice, len(items))
                 if numbers is None:
                     print("Invalid choice. Please try again.")
                     continue
-                # set() so "1,1" doesn't tick and untick the same item
-                for number in set(numbers):
-                    item = items[number - 1].lower()
-                    if item in selected:
-                        selected.remove(item)
-                    else:
-                        selected.add(item)
+                menu.toggle(items, numbers)
 
     def prompt_for_restrictions(self, current=None):
         # --- Prompts the user for Restrictions via the category menu and Returns them ---
         """Walks the user through the allergen menu. Returns a clean list, or ['none']."""
-        # Each entry: (group header, menu title, list of items)
-        menu_entries = [("Allergies", category, items) for category, items in ALLERGEN_CATALOG.items()]
-        menu_entries.append(("Restrictions", "Dietary / religious", DIETARY_RESTRICTIONS))
-        other_number = len(menu_entries) + 1
-
-        # Start from whatever the user already has saved (empty for new users)
-        selected = {r for r in (current or []) if r != "none"}
-
-        # Anything saved earlier that isn't in the catalog is kept under "Other"
-        custom_items = sorted(r for r in selected if r not in KNOWN_ITEMS)
+        menu = RestrictionMenu(current)
 
         while True:
-            self.show_category_menu(menu_entries, selected, custom_items)
+            self.show_category_menu(menu)
             choice = input("Your choice: ").strip().lower()
 
             if choice == "d":
                 break
             elif choice == "c":
-                selected.clear()
-            elif choice.isdigit() and 1 <= int(choice) <= len(menu_entries):
-                group, title, items = menu_entries[int(choice) - 1]
-                self.run_item_menu(f"{group} > {title}", items, selected)
-            elif choice.isdigit() and int(choice) == other_number:
-                self.run_item_menu("Other", custom_items, selected, allow_custom=True)
+                menu.clear()
+            elif choice.isdigit() and 1 <= int(choice) <= len(menu.entries):
+                group, title, items = menu.entries[int(choice) - 1]
+                self.run_item_menu(menu, f"{group} > {title}", items)
+            elif choice.isdigit() and int(choice) == menu.other_number:
+                self.run_item_menu(menu, "Other", menu.custom_items, allow_custom=True)
             else:
                 print("Please enter a number, 'd' or 'c'.")
 
-        return sorted(selected) if selected else ["none"]
+        return menu.selected_names() or ["none"]
 
     def flatten_restrictions(self, restrictions):
         if isinstance(restrictions, dict):
             return [item for key in ("allergies", "dietary_restrictions", "other")for item in restrictions.get(key, [])]
         return [item for item in restrictions if item != "none"]
-
 
     # Input handling for user authentication
     def handle_user_authentication(self):
@@ -208,7 +170,7 @@ class IOManager:
                 self.print_severity_summary(self.build_restrictions(names, severity)) # This is to print Severity Summary
 
                 # Overwrite the profile in the JSON database
-                restrictions = group_restrictions(names)
+                restrictions = group_restrictions(names, severity)
                 self.__save_data(username, restrictions)
 
                 saved = [n for n in names if n != "none"]
@@ -275,10 +237,27 @@ class IOManager:
     def prompt_for_severity(self, names, current=None): #Prompt for Severity Section
             current = current or {}
             severity = {}
+
+            already_rated = [name for name in names if needs_severity(name) and name in current]
+            change_saved = False
+            if already_rated:
+                print(f"\nYou already have severity level saved for: {', '.join(already_rated)}")
+                while True:
+                    answer = input("Would you like to change any of them? (y/n): ").strip().lower()
+                    if answer in ['y', 'n']:
+                        break
+                    print("Please enter only 'y or 'n'.")
+                change_saved = (answer == 'y')
+
             for name in names: #name means the Allergy name itself
                 if not needs_severity(name):
                     continue
                 previous = current.get(name)
+
+                if previous and not change_saved:
+                    severity[name] = previous
+                    continue
+
                 print(f"\nHow severely does ({name}) affect you?")
                 for number, (level, text) in enumerate(SEVERITY_DESCRIPTIONS.items(), start=1):
                     print(f"    {number}. {level:<4} - {text}")
