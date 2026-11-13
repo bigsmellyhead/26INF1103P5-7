@@ -33,6 +33,11 @@ class UserProfile:
     def severity_map(self) -> dict:
         return dict(self._severity)
 
+    # get the severity label as text
+    def severity_label(self, name: str):
+        level = self.severity_of(name)
+        return getattr(level, "value", level)
+
     # get the saved severity for one restriction 
     def severity_of(self, name: str):
         for saved_name, level in self._severity.items():
