@@ -62,7 +62,6 @@ class DataManager:
     
     # adds a new audit record to the database
     def append_audit_log(self, profile: UserProfile, audit_record: dict):
-        """Save an audit result. The restrictions snapshot (incl. severity) comes from the profile."""
         if not isinstance(profile, UserProfile):
             raise ValueError("append_audit_log expects a UserProfile.")
         if not isinstance(audit_record, dict):
@@ -100,7 +99,6 @@ class DataManager:
     # Below are functions used for admin seaches
     # search by username, returns UserProfile objects. Case-insensitive partial match.
     def search_user_profiles(self, name):
-        """Find user profiles by a partial username match. Returns UserProfile objects."""
         if not name or not name.strip():
             return []
 
@@ -114,7 +112,6 @@ class DataManager:
 
     # search for users who have a matching allergy or dietary restriction. Returns UserProfile objects.
     def search_dietary_restriction(self, restriction):
-        """Find users who have a matching allergy or dietary restriction. Returns UserProfile objects."""
         if not restriction or not restriction.strip():
             return []
 
@@ -130,7 +127,6 @@ class DataManager:
 
     # filter audit history by selected restrictions, returns list of (AuditLog, User) tuples.
     def filter_audit_history_by_restrictions(self, selected_items):
-        """Find audit records containing any selected restriction."""
         matches = []
         selected_lower = {item.casefold() for item in selected_items}
 
