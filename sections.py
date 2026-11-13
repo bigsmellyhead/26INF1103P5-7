@@ -29,19 +29,22 @@ class UserSummarySection(ReportSection):
         print(f"[USERNAME] {data.user_profile.username}")
         print(f"[USER PROFILE & RESTRICTIONS]")
 
+        profile = data.user_profile
         categories = [
             ("allergies", "Allergies"),
             ("dietary_restrictions", "Dietary Restrictions"),
             ("other", "Other")
         ]
         for key, label in categories:
-            items = data.user_profile.restrictions.get(key, [])
+            items = profile.items_in(key)
             if not items:
                 print(f"  • {label}: None")
             else:
                 print(f"  • {label}:")
                 for item in items:
-                    print(f"    - {item}")
+                    # Dietary items have no severity, so only show it when there is one
+                    level = profile.severity_label(item)
+                    print(f"    - {item} ({level})" if level else f"    - {item}")
         print("")
 
 class StallInsightSection(ReportSection):
@@ -95,14 +98,21 @@ class AllergyConflictSection(ReportSection):
         @return None
         """
         conflicts = data.result.get("allergy_conflicts",[])
-        
+
         if not conflicts:
             print("🚨 DETECTED CONFLICTS: None")
         else:
             print("🚨 DETECTED CONFLICTS:")
             for conflict in conflicts:
-                print(f"• [ALLERGY VIOLATION] {conflict} detected in ingredient breakdown.")
+                # Each conflict is a dict; LogicManager added "severity" from the user's profile
+                severity = conflict.get("severity", "HIGH")
+                color = RISK_COLOR_MAP.get(self._SEVERITY_TO_RISK.get(severity), "")
+                print(f"• {color}[{severity}] {conflict.get('restriction')}{COLOR_RESET} "
+                      f"({conflict.get('presence', '').lower()}) - {conflict.get('ingredient')}")
         print("")
+
+    # Also uses the Low/Medium/High colours from utils
+    _SEVERITY_TO_RISK = {"LOW": "Low", "MED": "Medium", "HIGH": "High"}
         
 
 
@@ -223,6 +233,16 @@ class IngredientBreakdownSection(ReportSection):
                 
             if("children" in child):
                 self._print_children_tree(child, prefix + indentation)
+
+# prints why the rules changed or questioned the AI's verdict (score got raised or capped)
+class FlagsSection(ReportSection):
+    def render(self, data: ResultAuditData):
+        flags = data.result.get("flags", [])
+        if not flags:
+            return
+        print(f"\n🔎 SAFETY RULE NOTES:")
+        for flag in flags:
+            print(f"• {flag}")
 
 class DisclaimerSection(ReportSection):
     def render(self, data: ResultAuditData):

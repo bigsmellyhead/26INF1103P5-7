@@ -1,23 +1,17 @@
 # io_manager.py
 
-from os import name
-
-from psutil import users
 from pwinput import pwinput
 from data_manager import DataManager
-from allergen_catalog import group_restrictions
 from restriction_menu import RestrictionMenu
-from database.database import SessionLocal 
-from database.models import AuditLog, User
 import utils
-from art import text2art
-from allergen_catalog import create_restriction
 from collections.abc import Callable
 from Data import ResultAuditData
+from UserProfile import UserProfile
 from allergen_catalog import create_restriction, needs_severity, SEVERITY_DESCRIPTIONS
 from audit_report_renderer import AuditReportRenderer
-from sections import (HeaderSection, UserSummarySection, StallInsightSection, RiskAssessmentSection, 
-AllergyConflictSection, DietaryStatusSection, CrossContactSection, IngredientBreakdownSection, DisclaimerSection)
+from sections import (HeaderSection, UserSummarySection, StallInsightSection, RiskAssessmentSection,
+AllergyConflictSection, DietaryStatusSection, CrossContactSection, IngredientBreakdownSection,
+FlagsSection, DisclaimerSection)
 
 
 class IOManager:
@@ -41,6 +35,7 @@ class IOManager:
                 DietaryStatusSection(),
                 CrossContactSection(),
                 IngredientBreakdownSection(),
+                FlagsSection(),
                 DisclaimerSection()
             ]
         )
@@ -70,8 +65,8 @@ class IOManager:
             print("No matching user profiles found.")
             return
 
-        for user in users:
-            self._display_profile(user)
+        for profile in users:
+            self._display_profile(profile)
 
     # retrieve input for dietary restriction search
     def _search_dietary_restriction(self):
@@ -88,35 +83,21 @@ class IOManager:
             print("No profiles found with that restriction keyword.")
             return
 
-        for user in matches:
-            self._display_profile(user)
+        for profile in matches:
+            self._display_profile(profile)
 
-    
-    # display a user profile's details
-    def _display_profile(self, user):
-        """Display a user profile's details."""
-        print(f"\nUsername: {user.username}")
+    # display a user profile's details (the serializer already cleaned the data)
+    def _display_profile(self, profile: UserProfile):
+        """Display a user profile's details, with severity where saved."""
+        print(f"\nUsername: {profile.username}")
 
-        restrictions = user.restrictions or {}
+        for category in UserProfile.CATEGORIES:
+            items = []
+            for item in profile.items_in(category):
+                level = profile.severity_label(item)
+                items.append(f"{item} ({level})" if level else item)
 
-        for category in ("allergies", "dietary_restrictions", "other"):
-            items = restrictions.get(category, [])
-
-            if isinstance(items, str):
-                items = [items]
-
-            if not isinstance(items, (list, tuple, set)):
-                items = []
-
-            items = [
-                item for item in items
-                if isinstance(item, str) and item.strip()
-            ]
-
-            print(
-                f"  {category.replace('_', ' ').title()}: "
-                f"{', '.join(items) or 'none'}"
-            )
+            print(f"  {category.replace('_', ' ').title()}: {', '.join(items) or 'none'}")
 
     # Get category selection
     def _get_audit_filter_input(self):
@@ -289,13 +270,21 @@ class IOManager:
 
         return menu.selected_names() or ["none"]
 
-    def flatten_restrictions(self, restrictions):
-        if isinstance(restrictions, dict):
-            return [item for key in ("allergies", "dietary_restrictions", "other")for item in restrictions.get(key, [])]
-        return [item for item in restrictions if item != "none"]
+    def _edit_restrictions(self, profile: UserProfile) -> None:
+        """Run the menus, then update the SAME profile object in place and save it."""
+        names = self.prompt_for_restrictions(current=profile.all_restriction_names() or None)
+        severity = self.prompt_for_severity(names, current=profile.severity_map())
+
+        # build_restrictions -> set of Restriction objects (AllergenRestriction etc.)
+        restrictions = self.build_restrictions(names, severity)
+        self.print_severity_summary(restrictions)
+        profile.set_restrictions(restrictions)
+
+        # Only now is the profile turned back into a dict (inside DataManager, by the serializer)
+        self.__save_data(profile)
 
     # Input handling for user authentication
-    def handle_user_authentication(self):
+    def handle_user_authentication(self) -> UserProfile:
         """Handles existing user check, profile editing, or new user registration."""
 
         # --- App banner ---
@@ -315,13 +304,13 @@ class IOManager:
             print("\nUsername cannot be empty. Defaulting to 'guest'.")
             username = "guest"
 
-        # Look up this username in the saved profiles (returns None if new)
-        user_profile = self.__load_data(username)
+        # Look up this username (DataManager returns a UserProfile, or None if new)
+        profile = self.__load_data(username)
 
-        if user_profile:
+        if profile:
             # --- Existing user: show their saved data ---
-            saved_names = self.flatten_restrictions(user_profile['restrictions'])
-            print(f"\nWelcome back, {user_profile['username']}!")
+            saved_names = profile.all_restriction_names()
+            print(f"\nWelcome back, {profile.username}!")
             print(f"Current saved restrictions: {', '.join(saved_names) or 'none'}\n")
 
             # Loop until the user gives a valid y/n answer
@@ -333,41 +322,21 @@ class IOManager:
 
             if update_choice == 'y':
                 # --- User wants to change their restrictions (menu opens pre-ticked) ---
-                names = self.prompt_for_restrictions(current=saved_names)
-                severity = self.prompt_for_severity(names, current=user_profile['restrictions'].get("severity", {}))
-                self.print_severity_summary(self.build_restrictions(names, severity)) # This is to print Severity Summary
-
-                # Overwrite the profile in the JSON database
-                restrictions = group_restrictions(names, severity)
-                self.__save_data(username, restrictions)
-
-                saved = [n for n in names if n != "none"]
+                self._edit_restrictions(profile)
+                saved = profile.all_restriction_names()
                 print(f"\nProfile updated! Saved {len(saved)} restriction(s): {', '.join(saved) or 'none'}")
             else:
-                # --- User declined to update: keep existing restrictions as-is ---
                 print("No updates made.")
-                restrictions = user_profile['restrictions']
         else:
-            # --- New user: walk them through initial setup ---
+            # --- New user: start with an empty profile, then fill it in ---
             print(f"\nNew user detected ('{username}'). Let's set up your dietary profile.")
-            names = self.prompt_for_restrictions()
-            severity = self.prompt_for_severity(names)
-            self.print_severity_summary(self.build_restrictions(names, severity)) # This is to print Severity Summary
-
-            # Create the profile for the first time
-            # Reformat the restrictions to group them according:
-            # Allergens
-            # Dietary Restrictions
-            # Others
-            restrictions = group_restrictions(names, severity)
-
-            ## Save to database
-            self.__save_data(username, restrictions)
-            saved = [n for n in names if n != "none"]
+            profile = UserProfile(username)
+            self._edit_restrictions(profile)
+            saved = profile.all_restriction_names()
             print(f"\nProfile saved for {username}! Saved {len(saved)} restriction(s): {', '.join(saved) or 'none'}")
 
-        # Hand back the username and their current (possibly just-updated) restrictions
-        return username, restrictions
+        # Hand back the profile object itself; everyone else reads from it
+        return profile
 
     # Input handling for stall and dish
     def get_user_inputs(self):

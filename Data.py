@@ -30,7 +30,8 @@ class BaseAuditData():
     def to_dict(self) -> dict:
         return {
             "username": self._user_profile.username,
-            "restrictions": self._user_profile.restrictions,
+            # Plain names, not the set of Restriction objects (DataManager serializes the full profile itself)
+            "restrictions": self._user_profile.all_restriction_names(),
             "stall": self._stall,
             "dish": self._dish,
         }
