@@ -10,3 +10,14 @@ CUSTOM_PROMPT = (
     # --- Prompt for anything not in the catalog ---
     "Type your own allergies/restrictions, separated by commas\n"
     "(e.g. g6pd, blue berries): ")
+
+SEVERITY_ANSWERS = {"1": "LOW", "L": "LOW", "LOW": "LOW",
+                    "2": "MED", "M": "MED", "MED": "MED",
+                    "3": "HIGH", "H": "HIGH", "HIGH": "HIGH"}
+
+RISK_COLOR_MAP = {
+    'High': COLOR_RED,
+    'Medium': COLOR_YELLOW,
+    'Low': COLOR_GREEN,
+
+}

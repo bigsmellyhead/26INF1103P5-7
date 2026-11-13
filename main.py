@@ -2,29 +2,25 @@
 from io_manager import IOManager
 from ai_manager import AIManager
 from logic_manager import LogicManager
-from data_manager import initialize_database, append_audit_log
-from EventBus import event_bus
-from EventName import EventName
-from Data import ValidateProcessData
-
+from data_manager import DataManager
+from UserProfile import UserProfile
+from Data import AIAuditData
 def main():
 
     #Initialise all the managers
-    ai_manager = AIManager(event_bus)
-
-    # event bus subscribes to VALIDATEPROCESSDATA in its constructor but not called directly; G7 PLEASE DO NOT DELETE - josh
-    LogicManager(event_bus)
-
-    io_manager = IOManager()
+    data_manager = DataManager()
+    logic_manager = LogicManager()
+    io_manager = IOManager(data_manager.get_user_profile, data_manager.save_user_profile)
+    ai_manager = AIManager(io_manager.display_error)
 
 
     # Initialize MySQL database and create missing tables
-    initialize_database()
+    data_manager.initialize_database()
 
     # Authenticate or register user profile
+    # Should return user profile object
     username, restrictions = io_manager.handle_user_authentication()
     audit_results = []
-    event_bus.subscribe_event(EventName.AUDITRESULTDATA, audit_results.append)
 
     while True:
         stall, dish = io_manager.get_user_inputs()
@@ -37,12 +33,10 @@ def main():
             print("\nProcessing audit with AI reasoning engine...")
 
             # Query LLM API
+            # Can change ai_output to product an AIAUDITDATA
             ai_output = ai_manager.query_ai_safety_auditor(
                 stall, dish, restrictions
             )
-
-            while event_bus.active_events:
-                event_bus.update()
 
             if ai_output is None:
                 raise ValueError(
@@ -52,38 +46,26 @@ def main():
 
             # Validate schema and enforce rules
             audit_results.clear()
-            event_bus.raise_event(
-                EventName.VALIDATEPROCESSDATA,
-                ValidateProcessData(ai_output, restrictions, username, stall, dish)
+            processed_data = logic_manager.validate_and_process_logic(
+                AIAuditData(
+                    UserProfile(
+                        username,
+                        restrictions
+                    ),
+                    stall,
+                    dish,
+                    ai_output
+                )
             )
-
-            # Logic manager raises AUDITRESULTDATA then delivered to audit_results
-            # Update until the bus has no more queued events left
-            while event_bus.active_events:
-                event_bus.update()   
-
-            processed_data = audit_results.pop().result
 
             # Form final log entry
-            final_record = {
-                "username": username,
-                "restrictions": restrictions,
-                "stall": stall,
-                "dish": dish,
-                **processed_data
-            }
+            final_record = processed_data.to_dict()
 
             # Save audit record to MySQL
-            append_audit_log(final_record)
+            data_manager.append_audit_log(final_record)
 
             # Display results
-            io_manager.display_audit_result(
-                username,
-                stall,
-                dish,
-                restrictions,
-                processed_data
-            )
+            io_manager.display_audit_result(processed_data)
 
         except Exception as e:
             print(f"\n[System Error Caught]: {e}")

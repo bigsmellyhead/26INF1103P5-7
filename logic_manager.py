@@ -1,5 +1,5 @@
 # logic_manager.py
-from Data import Data, ValidateProcessData, AuditResultData
+from Data import AIAuditData, ResultAuditData
 from EventName import EventName
 from ingredient_tree_processor import IngredientTreeProcessor
 
@@ -8,16 +8,11 @@ from ingredient_tree_processor import IngredientTreeProcessor
 # Expects: risk_score, stall_knowledge, dietary_status (dict), allergy_conflicts, cross_contact_risks, ingredient_tree.
 # Adds: "flags", a list of reasons whenever a rule changed or questioned the AI's verdict.
 
-
 class LogicManager:
 
-    def __init__(self, bus):
-        self._bus = bus
+    def __init__(self):
         self._certification_requirements = ["halal", "kosher"]
         self._tree_processor = IngredientTreeProcessor()
-
-        # Runs validate_and_process_logic whenever the AI result arrives
-        self._bus.subscribe_event(EventName.VALIDATEPROCESSDATA, self.validate_and_process_logic)
 
     # Raises the score to a minimum (never lowers it) and records why
     def _raise_score(self, data: dict, minimum: int, reason: str) -> None:
@@ -31,12 +26,12 @@ class LogicManager:
             return [item for items in restrictions.values() for item in items]
         return [item for item in restrictions if item != "none"]
 
-    def validate_and_process_logic(self, event_data: Data) -> None:
-        if not isinstance(event_data, ValidateProcessData):
+    def validate_and_process_logic(self, ai_data: AIAuditData) -> ResultAuditData:
+        if not isinstance(ai_data, AIAuditData):
             raise TypeError("LogicManager expects ValidateProcessData")
 
-        data = event_data.ai_result
-        restrictions = event_data.restrictions
+        data = ai_data.ai_result
+        restrictions = ai_data.user_profile.restrictions
 
         data["flags"] = []
         user_restrictions = self._flatten_restrictions(restrictions)
@@ -118,11 +113,10 @@ class LogicManager:
             data["risk_level"] = "Low"
 
         # Hand the finished audit to whoever is listening (display, save)
-        result = AuditResultData(
-            event_data.username,
-            event_data.stall,
-            event_data.dish,
-            restrictions,
-            data,
+        result = ResultAuditData(
+            ai_data.user_profile,
+            ai_data.stall,
+            ai_data.dish,
+            data
         )
-        self._bus.raise_event(EventName.AUDITRESULTDATA, result)
+        return result
