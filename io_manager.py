@@ -1,212 +1,40 @@
 # io_manager.py
 from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS , group_restrictions
-from EventBus import event_bus
-from EventName import EventName
 import utils
 from art import text2art
 from allergen_catalog import create_restriction
 from collections.abc import Callable
-from allergen_restriction import AllergenRestriction
 from Data import ResultAuditData
 from allergen_catalog import create_restriction, needs_severity, SEVERITY_DESCRIPTIONS
-
+from audit_report_renderer import AuditReportRenderer
+from sections import (HeaderSection, UserSummarySection, StallInsightSection, RiskAssessmentSection, 
+AllergyConflictSection, DietaryStatusSection, CrossContactSection, IngredientBreakdownSection, DisclaimerSection)
 
 
 class IOManager:
 
     __load_data : Callable
     __save_data : Callable
+    # Composes a audit renderer that helps to render all sections
+    __audit_renderer: AuditReportRenderer
 
     def __init__(self, load_data: Callable, save_data: Callable):
         self.__load_data = load_data
         self.__save_data = save_data
+        self.__audit_renderer = AuditReportRenderer(
+            [
+                HeaderSection(),
+                UserSummarySection(),
+                StallInsightSection(),
+                RiskAssessmentSection(),
+                AllergyConflictSection(),
+                DietaryStatusSection(),
+                CrossContactSection(),
+                IngredientBreakdownSection(),
+                DisclaimerSection()
+            ]
+        )
 
-    """!
-    @brief   - Prints the structured summary of a user's allergies, dietary restrictions, and other flags.
-    @details - Extracts and sequentially prints to stdout from sub-lists from the parameter 'restrictions' in the following order:
-            1. Allergies
-            2. Dietary Restrictions
-            3. Others
-            *Prints 'None' for any empty lists
-
-    @param restrictions - A dictionary containing lists mapping to the keys "allergies", "dietary_restrictions", and "others".
-    @return None
-    """
-    def print_user_restrictions(self, restrictions):
-        categories = [
-            ("allergies", "Allergies"),
-            ("dietary_restrictions", "Dietary Restrictions"),
-            ("other", "Other")
-        ]
-        for key, label in categories:
-            items = restrictions.get(key, [])
-            if not items:
-                print(f"  • {label}: None")
-            else:
-                print(f"  • {label}:")
-                for item in items:
-                    print(f"    - {item}")
-        print("")
-
-    """!
-    @brief   -  Evaluates and prints a colored risk assessment statement alongside safety verdicts.
-    @details -  Processes execution fields to dynamically evaluate severity thresholds. 
-                It utilizes a Python match-case block to match 'High', 'Medium', or 'Low' text levels to terminal color constants, 
-                then prints a final binary safety verdict ('SAFE TO EAT' vs 'NOT SAFE / AVOID') alongside contextual logic reasoning.
-
-    @param result_data - A dictionary containing  keys: 'risk_level' (str), 'is_safe' (bool), 'risk_score' (int/float), and 'reasoning' (str).
-    @note - Utilizes local ANSI constants (`COLOR_RED`, `COLOR_YELLOW`, `COLOR_GREEN`, `COLOR_RESET`) to output color metrics into the terminal interface.
-    @return None
-    """
-    def print_risk_assessment(self, result_data: dict):
-        # ANSI Colour definitions
-        CURRENT_COLOR = ""
-        #Analyse Risk Score and assign color codes based on risk score
-        match(result_data.get('risk_level')):
-            case('High'):
-                CURRENT_COLOR = utils.COLOR_RED
-            case("Medium"):
-                CURRENT_COLOR = utils.COLOR_YELLOW
-            case("Low"):
-                CURRENT_COLOR = utils.COLOR_GREEN
-
-        safety_status = "SAFE TO EAT" if result_data.get('is_safe') else "NOT SAFE / AVOID"
-        #INSERT ASCII ART
-        text_to_render = f"Risk Assessment: {result_data.get('risk_score')}% ({result_data.get('risk_level')})"
-        art = text2art(text_to_render,font = 'small', chr_ignore=True)
-        print(f"{CURRENT_COLOR}{art}")
-        art_2 = text2art(f"VERDICT: {safety_status}",font = 'small', chr_ignore=True)
-        print(art_2)
-        print(f"Reasoning:", end = " ")
-        print(f"{result_data.get('reasoning')}\n    {utils.COLOR_RESET}")
-
-    """!
-    @brief   - Prints the Allergen Conflicts to stdout
-    @details - Extracts and prints detected allergy conflicts from result_data. 
-            *Prints 'None' if no conflicts are found, or lists each violation.
-
-    @param result_data - Dictionary containing 'allergy_conflicts' key 
-    @return None
-    """
-    def print_allergy_conflicts(self, result_data):
-        conflicts = result_data.get("allergy_conflicts",[])
-
-        if not conflicts:
-            print("🚨 DETECTED CONFLICTS: None")
-        else:
-            print("🚨 DETECTED CONFLICTS:")
-            for conflict in conflicts:
-                print(f"• [ALLERGY VIOLATION] {conflict} detected in ingredient breakdown.")
-
-    """!
-    @brief   - Prints the Dietary Status to stdout
-    @details - Extracts and prints dietary status flags and values from result_data.
-            *Prints 'None' if the status is empty, or lists each key-value pair.
-
-    @param result_data - Dictionary containing 'dietary_status' key
-    @return None
-    """
-    def print_dietary_status(self, result_data):
-        dietary_status = result_data.get("dietary_status",{})
-        
-        if not dietary_status:
-            print("🌿 DIETARY STATUS: None")
-        else:
-            print("🌿 DIETARY STATUS:")
-            for key , value in dietary_status.items():
-                print(f"• {key}: {value}")
-
-    """!
-    @brief   - Prints the Cross-Contamination Risks to stdout
-    @details - Extracts and prints cross-contamination risks from result_data.
-            *Prints 'None' if the list is empty, or lists each risk.
-
-    @param result_data - Dictionary containing 'cross_contact_risks' key
-    @return None
-    """
-    def print_cross_contact_risks(self, result_data):
-        cross_contact_risks = result_data.get("cross_contact_risks",[])
-        if not cross_contact_risks:
-            print("⚠️  Cross-Contamination Risks: None")
-        else:
-            print("⚠️  Cross-Contamination Risks:")
-            for risk in cross_contact_risks:
-                print(f"• [ENVIRONMENTAL RISK] {risk}")
-    
-    def has_triggered_descendant(self, node):
-        if node.get("conflict") and node.get("status") == "Trigger":
-            return True
-        for child in node.get("children", []):
-            if self.has_triggered_descendant(child):
-                return True
-        return False
-
-    """!
-        @brief   - Recursively prints the child nodes of an ingredient tree with structural tree lines
-        @details - Iterates through the children of a starting node, checks their status and 
-                conflict state to apply color formatting, and recursively processes nested 
-                sub-children with proper indentation and tree branching symbols (├── and └──).
-    
-        @param starting_node - Dictionary representing the current node (contains 'name', 'status', 'conflict', and optionally 'children').
-        @param prefix        - String used for tracking recursive indentation and tree alignment.
-        @return None
-        """
-    def print_children_tree(self, starting_node, prefix = ""):
-        children = starting_node["children"]
-
-        symbol_startTree = "├── "
-        symbol_endTree = "└── "
-        indentation = ""
-        #Loop through the children
-        for index, child in enumerate(children):
-            child_name = child["name"]
-            child_status = child["status"]
-            child_conflict = child["conflict"]
-            child_verdict = ""
-
-            # Factor in whether the node itself has a conflict or has triggered descendants
-            if child_status == "Trigger" and (child_conflict or self.has_triggered_descendant(child)):
-                if child_conflict:
-                    child_verdict = f"{utils.COLOR_RED}<-----[{child_status}: {child_conflict}]{utils.COLOR_RESET}"
-                else:
-                    child_verdict = f"{utils.COLOR_RED}({child_status}){utils.COLOR_RESET}"
-            else:
-                child_verdict = f"{utils.COLOR_GREEN}({child_status}){utils.COLOR_RESET}"
-
-            if(index == len(children) - 1):
-                print(f"{prefix}{symbol_endTree}{child_name} {child_verdict}")
-                indentation = "    "
-            else:
-                print(f"{prefix}{symbol_startTree}{child_name} {child_verdict}")
-                indentation = "│   "
-
-            # Show the stall-specific note under the ingredient it applies to
-            child_insight = child.get("stall_insight")
-            if child_insight:
-                print(f"{prefix}{indentation}↳ {utils.COLOR_YELLOW}Stall: {child_insight}{utils.COLOR_RESET}")
-                
-            if("children" in child):
-                self.print_children_tree(child, prefix + indentation)
-
-    """!
-    @brief   - Prints the full ingredient breakdown and traceability tree to stdout
-    @details - Checks for valid result data, prints the section header, extracts the root 
-            dish name from the 'ingredient_tree', and initiates the recursive 
-            child tree printing function.
-
-    @param result_data - Dictionary containing the 'ingredient_tree' key mapping to the root node.
-    @return None
-    """
-    def print_ingredient_breakdown_tree(self, result_data):
-        if not result_data:
-            return
-
-        print(f"{utils.SECTION}")
-        print("🌳 FULL INGREDIENT BREAKDOWN & TRACEABILITY:")
-        print(f"{utils.SECTION}")
-        ingredient_list = result_data.get("ingredient_tree")
-        print(f"Dish: {ingredient_list["name"]}")
-        self.print_children_tree(ingredient_list, "")
 
     # Input handling for restrictions
     def parse_restrictions(self, raw_text):
@@ -430,14 +258,6 @@ class IOManager:
         #print("[AI Manager] GEMINI_API_KEY is not set. Please set it in your .env file.")
         print(data)
 
-    def display_attempt_error(self, data : str):
-        if not data: raise ValueError("Data is empty")
-
-        attempt = data.attempt
-        max_tries = data.max_tries
-        error = data.error
-        print(f"[AI Manager] Attempt {attempt}/{max_tries} failed: {error}")
-
     """!
     @brief   - Displays the final processed audit report clearly to the user
     @details - Compiles and prints a comprehensive dish safety audit to stdout. 
@@ -445,51 +265,12 @@ class IOManager:
             risk assessment, allergy conflicts, dietary status, cross-contamination 
             risks, and the full ingredient breakdown tree, followed by an advisory disclaimer.
 
-    @param username    - The name of the user requesting the audit.
-    @param stall       - The location or stall name where the dish is served.
-    @param dish        - The name of the dish being audited.
-    @param restrictions - A dictionary containing the user's dietary restrictions and allergies.
-    @param result_data  - A dictionary containing audit results (stall knowledge, insights, conflicts, tree, etc.).
+    @param data  - A resultaudit data containing audit results (stall knowledge, insights, conflicts, tree, etc.).
     @return None
     """
     def display_audit_result(self, data: ResultAuditData):
         """Displays the final processed audit report clearly to the user."""
-        stall_knowledge = data.result["stall_knowledge"]
-        stall_emoji = "🟢" if stall_knowledge == "Known" else "🟡" if stall_knowledge == "Inferred" else "🔴"
-        
-        print(f"{utils.DIVIDER}")
-        print("                         DISH SAFETY AUDIT            ")
-        print(f"{utils.DIVIDER}")
-
-        # User and Restrictions section
-        print(f"[USERNAME] {data.user_profile.username}")
-        print(f"[USER PROFILE & RESTRICTIONS]")
-        self.print_user_restrictions(data.user_profile.restrictions)
-
-        # Stall and Insights Section
-        print(f"[DISH] {data.dish}")
-        print(f"[LOCATION/STALL] {data.stall}\n")
-        print(f"[STALL STATUS: {stall_knowledge} {stall_emoji}]")
-        print(f"[Stall Insights]")
-        print(f"{data.result.get('stall_specific_insights')}\n")
-
-        # Risk Assessment Section
-        print(f"{utils.SECTION}")
-        self.print_risk_assessment(data.result)
-        self.print_allergy_conflicts(data.result)
-        print("")
-        self.print_dietary_status(data.result)
-        print("")
-        self.print_cross_contact_risks(data.result)
-        print("")
-
-        # Ingredient Breakdown Section
-        self.print_ingredient_breakdown_tree(data.result)
-
-        print(f"\n{utils.DIVIDER}")
-        print("⚠️  ADVISORY DISCLAIMER: This tool is advisory only.")
-        print("   Always verify with store owners for safety.")
-        print(f"{utils.DIVIDER}")
+        self.__audit_renderer.render_sections(data)
 
     def prompt_for_severity(self, names, current=None): #Prompt for Severity Section
             current = current or {}
@@ -512,7 +293,7 @@ class IOManager:
                         break
                     print("Please enter 1,2 or 3.")
             return severity    
-
+    
     def build_restrictions(self, names, severity): #Takes the list of ticked names and turn each one into a restriction object, turning them into a set.
         return {create_restriction(n, severity.get(n)) for n in names if n != "none"}
 

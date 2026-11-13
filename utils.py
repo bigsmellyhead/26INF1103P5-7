@@ -14,3 +14,10 @@ CUSTOM_PROMPT = (
 SEVERITY_ANSWERS = {"1": "LOW", "L": "LOW", "LOW": "LOW",
                     "2": "MED", "M": "MED", "MED": "MED",
                     "3": "HIGH", "H": "HIGH", "HIGH": "HIGH"}
+
+RISK_COLOR_MAP = {
+    'High': COLOR_RED,
+    'Medium': COLOR_YELLOW,
+    'Low': COLOR_GREEN,
+
+}
