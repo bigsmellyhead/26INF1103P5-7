@@ -35,7 +35,7 @@ class AIManager:
         data["dietary_status"] = {item["requirement"]: item["status"] for item in data["dietary_status"]}
         return data
 
-    def query_ai_safety_auditor(self, stall, dish, restrictions):
+    def query_ai_safety_auditor(self, stall, dish, profile):
 
         # checks for api key
         if not self._client.has_api_key():
@@ -45,7 +45,7 @@ class AIManager:
             return None
 
         # calls build_user_message method to wrap sanitised user data in tags
-        user_data = self._prompt_builder.build_user_message(stall, dish, restrictions)
+        user_data = self._prompt_builder.build_user_message(stall, dish, profile)
 
         for attempt in range(1, self._max_tries + 1):
             try:
@@ -62,7 +62,7 @@ class AIManager:
             except Exception as error:
                 # error will be logged to api.logs
                 logging.error(f"Attempt {attempt}/{self._max_tries}:API has error: {error} ")
-                # IOManager is subscribed to this event and displays the message
+            # Calls IO manager display_error (passed in as print_error) to show the message
                 error_msg = f"[AI Manager] Attempt {attempt}/{self._max_tries} failed: {error}"
                 self.__print_error(error_msg)
                 if attempt < self._max_tries:
