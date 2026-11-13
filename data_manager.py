@@ -123,3 +123,98 @@ class DataManager:
             )
 
             session.add(audit)
+
+    def search_user_profiles(self, name):
+        """Find user profiles by a partial username match."""
+        if not name or not name.strip():
+            return []
+
+        search_term = name.strip().casefold()
+
+        with SessionLocal() as session:
+            users = session.scalars(
+                select(User)
+                .where(
+                    func.lower(User.username).contains(search_term)
+                )
+                .order_by(User.username)
+            ).all()
+
+            return users
+
+
+    def search_dietary_restriction(self, restriction):
+        """Find users who have a matching allergy or dietary restriction."""
+        if not restriction or not restriction.strip():
+            return []
+
+        search_term = restriction.strip().casefold()
+
+        with SessionLocal() as session:
+            users = session.scalars(select(User)).all()
+
+            matching_users = []
+
+            for user in users:
+                user_restrictions = user.restrictions or {}
+
+                for category in ("allergies", "dietary_restrictions", "other"):
+                    items = user_restrictions.get(category, [])
+
+                    if isinstance(items, str):
+                        items = [items]
+
+                    if any(
+                        search_term in item.casefold()
+                        for item in items
+                        if isinstance(item, str)
+                    ):
+                        matching_users.append(user)
+                        break
+
+            return matching_users
+
+
+    def filter_audit_history_by_restrictions(self, selected_items):
+        """Find audit records containing any selected restriction."""
+
+        matches = []
+
+        with SessionLocal() as session:
+            rows = session.execute(
+                select(AuditLog, User)
+                .join(User, AuditLog.user_id == User.user_id)
+                .order_by(AuditLog.created_at.desc())
+            ).all()
+
+            for audit, user in rows:
+                restrictions = audit.restrictions_snapshot or {}
+
+                recorded_items = []
+
+                for category in (
+                    "allergies",
+                    "dietary_restrictions",
+                    "other"
+                ):
+                    items = restrictions.get(category, [])
+
+                    if isinstance(items, str):
+                        items = [items]
+
+                    recorded_items.extend(
+                        item for item in items
+                        if isinstance(item, str)
+                    )
+
+                recorded_lower = {
+                    item.casefold() for item in recorded_items
+                }
+
+                if any(
+                    item.casefold() in recorded_lower
+                    for item in selected_items
+                ):
+                    matches.append((audit, user))
+
+        return matches
