@@ -1,107 +1,84 @@
-
+# data_manager.py
 from sqlalchemy import select, func
 
 from database.database import SessionLocal, init_db
 from database.models import User, AuditLog
+from UserProfile import UserProfile
+from profile_serializer import ProfileSerializer
+
+
+# data_manager is the only class that has access to the database through SQLAlchemy. 
+# Profiles are serialized/deserialized at the border, the rest of the code never sees raw data.
+# After deserialization, rest of the code retrieves UserProfile objects, which are immutable and do not know about the database.
 
 class DataManager:
 
     def __init__(self):
-        pass
+        # Composition: DataManager creates and owns its serializer
+        self._serializer = ProfileSerializer()
 
+    # creates the database tables if they do not exist yet. Does not delete existing data.
     def initialize_database(self):
         """Initialize the MySQL database tables."""
         init_db()
 
+    # find user by username, returns None if not found. Case-insensitive.
+    def _find_user(self, session, username):
+        return session.scalar(
+            select(User).where(func.lower(User.username) == username.strip().lower())
+        )
 
+    # takes user object from database, coverts to UserProfile object. Returns None if user is None.
+    def _to_profile(self, user) -> UserProfile:
+        return self._serializer.deserialize(user.username, user.restrictions)
+
+    # load a user's profile as a UserProfile object, or None if they are new.
     def get_user_profile(self, username):
-        """Retrieve a user's profile using their username."""
         if not username or not username.strip():
             return None
 
-        normalized_username = username.strip().lower()
-
         with SessionLocal() as session:
-            user = session.scalar(
-                select(User).where(
-                    func.lower(User.username) == normalized_username
-                )
-            )
-
+            user = self._find_user(session, username)
             if user is None:
                 return None
+            return self._to_profile(user)
 
-            return {
-                "username": user.username,
-                "restrictions": user.restrictions
-            }
-
-
-    def save_user_profile(self, username, restrictions):
-        """Register a new user or update their restrictions."""
-        if not username or not username.strip():
+    # Register a new user or update their restrictions (serialize only here).
+    def save_user_profile(self, profile: UserProfile):
+        if not isinstance(profile, UserProfile):
+            raise ValueError("save_user_profile expects a UserProfile.")
+        if not profile.username or not profile.username.strip():
             raise ValueError("Username cannot be empty.")
 
-        if not isinstance(restrictions, dict):
-            raise ValueError("Restrictions must be a dictionary.")
-
-        normalized_username = username.strip().lower()
+        restrictions = self._serializer.serialize(profile)
 
         with SessionLocal.begin() as session:
-            user = session.scalar(
-                select(User).where(
-                    func.lower(User.username) == normalized_username
-                )
-            )
-
+            user = self._find_user(session, profile.username)
             if user is None:
-                user = User(
-                    username=username.strip(),
-                    restrictions=restrictions
-                )
-                session.add(user)
+                session.add(User(username=profile.username.strip(), restrictions=restrictions))
             else:
                 user.restrictions = restrictions
 
-
-    def append_audit_log(self, audit_record):
-        """Save an audit result into MySQL."""
+    
+    # adds a new audit record to the database
+    def append_audit_log(self, profile: UserProfile, audit_record: dict):
+        """Save an audit result. The restrictions snapshot (incl. severity) comes from the profile."""
+        if not isinstance(profile, UserProfile):
+            raise ValueError("append_audit_log expects a UserProfile.")
         if not isinstance(audit_record, dict):
             raise ValueError("Audit record must be a dictionary.")
 
-        username = audit_record.get("username")
-
-        if not isinstance(username, str) or not username.strip():
-            raise ValueError("Audit record must contain a valid username.")
-
-        restrictions = audit_record.get("restrictions") or {
-            "allergies": [],
-            "dietary_restrictions": [],
-            "other": []
-        }
-
-        if not isinstance(restrictions, dict):
-            raise ValueError("Restrictions must be a dictionary.")
-
-        normalized_username = username.strip().lower()
+        restrictions = self._serializer.serialize(profile)
 
         with SessionLocal.begin() as session:
-            user = session.scalar(
-                select(User).where(
-                    func.lower(User.username) == normalized_username
-                )
-            )
+            user = self._find_user(session, profile.username)
 
             # Create the user if they do not exist yet
             if user is None:
-                user = User(
-                    username=username.strip(),
-                    restrictions=restrictions
-                )
+                user = User(username=profile.username.strip(), restrictions=restrictions)
                 session.add(user)
 
-            # Store the audit result in the appropriate columns
-            audit = AuditLog(
+            session.add(AuditLog(
                 user=user,
                 stall=audit_record.get("stall"),
                 dish=audit_record.get("dish"),
@@ -117,68 +94,45 @@ class DataManager:
                 dietary_status=audit_record.get("dietary_status") or {},
                 flags=audit_record.get("flags") or [],
                 stall_knowledge=audit_record.get("stall_knowledge"),
-                stall_specific_insights=audit_record.get(
-                    "stall_specific_insights"
-                )
-            )
+                stall_specific_insights=audit_record.get("stall_specific_insights"),
+            ))
 
-            session.add(audit)
-
+    # Below are functions used for admin seaches
+    # search by username, returns UserProfile objects. Case-insensitive partial match.
     def search_user_profiles(self, name):
-        """Find user profiles by a partial username match."""
+        """Find user profiles by a partial username match. Returns UserProfile objects."""
         if not name or not name.strip():
             return []
-
-        search_term = name.strip().casefold()
 
         with SessionLocal() as session:
             users = session.scalars(
                 select(User)
-                .where(
-                    func.lower(User.username).contains(search_term)
-                )
+                .where(func.lower(User.username).contains(name.strip().lower()))
                 .order_by(User.username)
             ).all()
+            return [self._to_profile(user) for user in users]
 
-            return users
-
-
+    # search for users who have a matching allergy or dietary restriction. Returns UserProfile objects.
     def search_dietary_restriction(self, restriction):
-        """Find users who have a matching allergy or dietary restriction."""
+        """Find users who have a matching allergy or dietary restriction. Returns UserProfile objects."""
         if not restriction or not restriction.strip():
             return []
 
         search_term = restriction.strip().casefold()
 
         with SessionLocal() as session:
-            users = session.scalars(select(User)).all()
+            profiles = [self._to_profile(user) for user in session.scalars(select(User)).all()]
 
-            matching_users = []
+        return [
+            profile for profile in profiles
+            if any(search_term in item.casefold() for item in profile.all_restriction_names())
+        ]
 
-            for user in users:
-                user_restrictions = user.restrictions or {}
-
-                for category in ("allergies", "dietary_restrictions", "other"):
-                    items = user_restrictions.get(category, [])
-
-                    if isinstance(items, str):
-                        items = [items]
-
-                    if any(
-                        search_term in item.casefold()
-                        for item in items
-                        if isinstance(item, str)
-                    ):
-                        matching_users.append(user)
-                        break
-
-            return matching_users
-
-
+    # filter audit history by selected restrictions, returns list of (AuditLog, User) tuples.
     def filter_audit_history_by_restrictions(self, selected_items):
         """Find audit records containing any selected restriction."""
-
         matches = []
+        selected_lower = {item.casefold() for item in selected_items}
 
         with SessionLocal() as session:
             rows = session.execute(
@@ -188,33 +142,11 @@ class DataManager:
             ).all()
 
             for audit, user in rows:
-                restrictions = audit.restrictions_snapshot or {}
+                # Reuse the serializer so the snapshot is cleaned the same way as a profile
+                snapshot = self._serializer.deserialize(user.username, audit.restrictions_snapshot)
+                recorded_lower = {item.casefold() for item in snapshot.all_restriction_names()}
 
-                recorded_items = []
-
-                for category in (
-                    "allergies",
-                    "dietary_restrictions",
-                    "other"
-                ):
-                    items = restrictions.get(category, [])
-
-                    if isinstance(items, str):
-                        items = [items]
-
-                    recorded_items.extend(
-                        item for item in items
-                        if isinstance(item, str)
-                    )
-
-                recorded_lower = {
-                    item.casefold() for item in recorded_items
-                }
-
-                if any(
-                    item.casefold() in recorded_lower
-                    for item in selected_items
-                ):
+                if selected_lower & recorded_lower:
                     matches.append((audit, user))
 
         return matches
