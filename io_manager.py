@@ -1,6 +1,14 @@
 # io_manager.py
+
+from os import name
+
+from psutil import users
+from pwinput import pwinput
+from data_manager import DataManager
 from allergen_catalog import group_restrictions
 from restriction_menu import RestrictionMenu
+from database.database import SessionLocal 
+from database.models import AuditLog, User
 import utils
 from art import text2art
 from allergen_catalog import create_restriction
@@ -19,9 +27,10 @@ class IOManager:
     # Composes a audit renderer that helps to render all sections
     __audit_renderer: AuditReportRenderer
 
-    def __init__(self, load_data: Callable, save_data: Callable):
+    def __init__(self, load_data: Callable, save_data: Callable, data_manager: DataManager):
         self.__load_data = load_data
         self.__save_data = save_data
+        self.__data_manager = data_manager
         self.__audit_renderer = AuditReportRenderer(
             [
                 HeaderSection(),
@@ -36,6 +45,161 @@ class IOManager:
             ]
         )
 
+    # Admin account settings
+    # Change values to what we require, for demo purpose only
+    ADMIN_USERNAME = "ADMIN"
+    ADMIN_PASSWORD = "Admin123"
+
+    @staticmethod
+    def is_admin_username(username):
+        """Return True when the supplied username is the admin username."""
+        return username == IOManager.ADMIN_USERNAME
+
+    # retrieve input for user profile search
+    def _search_user_profiles(self):
+        """Find user profiles by username."""
+        name = input("Enter username to search: ").strip()
+
+        if not name:
+            print("Username cannot be blank.")
+            return
+
+        users = self.__data_manager.search_user_profiles(name)
+
+        if not users:
+            print("No matching user profiles found.")
+            return
+
+        for user in users:
+            self._display_profile(user)
+
+    # retrieve input for dietary restriction search
+    def _search_dietary_restriction(self):
+        """Find user profiles containing a restriction keyword."""
+        term = input("Enter a restriction keyword to search for: ").strip()
+
+        if not term:
+            print("Restriction keyword cannot be blank.")
+            return
+
+        matches = self.__data_manager.search_dietary_restriction(term)
+
+        if not matches:
+            print("No profiles found with that restriction keyword.")
+            return
+
+        for user in matches:
+            self._display_profile(user)
+
+    
+    # display a user profile's details
+    def _display_profile(self, user):
+        """Display a user profile's details."""
+        print(f"\nUsername: {user.username}")
+
+        restrictions = user.restrictions or {}
+
+        for category in ("allergies", "dietary_restrictions", "other"):
+            items = restrictions.get(category, [])
+
+            if isinstance(items, str):
+                items = [items]
+
+            if not isinstance(items, (list, tuple, set)):
+                items = []
+
+            items = [
+                item for item in items
+                if isinstance(item, str) and item.strip()
+            ]
+
+            print(
+                f"  {category.replace('_', ' ').title()}: "
+                f"{', '.join(items) or 'none'}"
+            )
+
+    # Get category selection
+    def _get_audit_filter_input(self):
+        """Ask the admin which restrictions to filter audit history by."""
+
+        selected_items = self.prompt_for_restrictions()
+
+        if not selected_items or selected_items == ["none"]:
+            print("No restrictions selected.")
+            return None
+
+        return selected_items
+
+
+	# Coordinate filter audit history by restriction category
+    def _filter_audit_history_by_allergy(self):
+        """Filter audit history using the admin's selected category."""
+        selected_items = self._get_audit_filter_input()
+
+        # Escape if no restrictions were selected
+        if selected_items is None:
+            return
+        
+        matches = self.__data_manager.filter_audit_history_by_restrictions(selected_items)
+        
+        self._display_filtered_audit_history(matches, selected_items)
+
+    # Output filtered audit history 
+    def _display_filtered_audit_history(self, matches, selected_category):
+        """Display audit records matching the selected restrictions."""
+
+        if not matches:
+            print(
+                f"No audit history found for: {selected_category}."
+            )
+            return
+
+        print(f"\nAudit history for: {selected_category}")
+
+        for audit, user in matches:
+            print(
+                f"\nDate: {audit.created_at}"
+                f"\nUsername: {user.username}"
+                f"\nStall: {audit.stall or 'Unknown stall'}"
+                f"\nDish: {audit.dish or 'Unknown dish'}"
+                f"\nSafe: {audit.is_safe}"
+                f"\nRisk: {audit.risk_level or 'Unknown'}"
+            )
+    
+    def _run_admin_menu(self):
+        """Display the admin menu until the admin chooses to exit."""
+        print("\nWelcome, Admin!")
+
+        while True:
+            print(
+                "\nADMIN MENU\n"
+                "1. Search for a user profile\n"
+                "2. Search profiles by restriction keyword\n"
+                "3. Filter audit history by restriction category\n"
+                "4. Exit admin menu"
+            )
+
+            choice = input("Select an option: ").strip()
+
+            if choice == "1":
+                self._search_user_profiles()
+            elif choice == "2":
+                self._search_dietary_restriction()
+            elif choice == "3":
+                self._filter_audit_history_by_allergy()
+            elif choice == "4":
+                print("Exiting admin menu. Stay safe!")
+                return
+            else:
+                print("Please choose an option from 1 to 4.")
+
+    def run_admin_login(self):
+        """Ask for the admin password and open the admin menu if correct."""
+        if pwinput("Enter admin password: ", mask="*") != self.ADMIN_PASSWORD:
+            print("Invalid admin password. Access denied.")
+            return
+
+        self._run_admin_menu()
     # ================= Restriction Menu (display + input only) =================
 
     def show_category_menu(self, menu: RestrictionMenu):
@@ -141,6 +305,10 @@ class IOManager:
 
         # --- Get and validate username ---
         username = input("Enter your username: ").strip()
+
+        if self.is_admin_username(username):
+            self.run_admin_login()
+            return self.handle_user_authentication()  # Restart the process after admin menu
 
         if not username:
             # Fall back to a default rather than letting an empty username through
@@ -281,4 +449,5 @@ class IOManager:
             level = getattr(r, "severity_level", None)
             if level:
                 print(f"Severity for ({r.name}): {level.title()}")
+
 
