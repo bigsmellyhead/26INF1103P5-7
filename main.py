@@ -3,7 +3,6 @@ from io_manager import IOManager
 from ai_manager import AIManager
 from logic_manager import LogicManager
 from data_manager import DataManager
-from UserProfile import UserProfile
 from Data import AIAuditData
 def main():
 
@@ -17,10 +16,9 @@ def main():
     # Initialize MySQL database and create missing tables
     data_manager.initialize_database()
 
-    # Authenticate or register user profile
-    # Should return user profile object
-    username, restrictions = io_manager.handle_user_authentication()
-    audit_results = []
+  #login/register, collects users profile and dietry restriction
+    profile = io_manager.handle_user_authentication()
+
 
     while True:
         stall, dish = io_manager.get_user_inputs()
@@ -33,10 +31,7 @@ def main():
             print("\nProcessing audit with AI reasoning engine...")
 
             # Query LLM API
-            # Can change ai_output to product an AIAUDITDATA
-            ai_output = ai_manager.query_ai_safety_auditor(
-                stall, dish, restrictions
-            )
+            ai_output = ai_manager.query_ai_safety_auditor(stall, dish, profile)
 
             if ai_output is None:
                 raise ValueError(
@@ -44,25 +39,11 @@ def main():
                     "tries or the API key is not configured properly."
                 )
 
-            # Validate schema and enforce rules
-            audit_results.clear()
-            processed_data = logic_manager.validate_and_process_logic(
-                AIAuditData(
-                    UserProfile(
-                        username,
-                        restrictions
-                    ),
-                    stall,
-                    dish,
-                    ai_output
-                )
-            )
-
-            # Form final log entry
-            final_record = processed_data.to_dict()
-
+        # LogicManager checks the api reply against the user's reaction severity levels and sets the final risk score
+            processed_data = logic_manager.validate_and_process_logic(AIAuditData(profile, stall, dish, ai_output))
+            
             # Save audit record to MySQL
-            data_manager.append_audit_log(final_record)
+            data_manager.append_audit_log(profile, processed_data.to_dict())
 
             # Display results
             io_manager.display_audit_result(processed_data)
