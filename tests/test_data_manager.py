@@ -1,283 +1,533 @@
-import json
+
 import pytest
+from unittest.mock import Mock
+
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
 import data_manager as dm
+from database.database import Base
+from database.models import User, AuditLog
+from UserProfile import UserProfile
+
+
+# ==================================================
+# FIXTURE
+# ==================================================
+
+@pytest.fixture
+def data_manager(monkeypatch):
+    """
+    Create a DataManager connected to a temporary SQLite database.
+
+    This prevents tests from modifying the actual MySQL database.
+    """
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    Base.metadata.create_all(bind=engine)
+
+    TestSessionLocal = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        expire_on_commit=False,
+    )
+
+    # Replace the real database session with the temporary one
+    monkeypatch.setattr(dm, "SessionLocal", TestSessionLocal)
+
+    manager = dm.DataManager()
+
+    yield manager
+
+    Base.metadata.drop_all(bind=engine)
+    engine.dispose()
 
 
 @pytest.fixture
-def temp_database(tmp_path, monkeypatch):
-    """Use a temporary JSON database for each test."""
-    db_file = tmp_path / "audit_history.json"
-    monkeypatch.setattr(dm, "DB_FILE", str(db_file))
-    return db_file
+def sample_profile():
+    """Create a reusable sample user profile."""
+
+    return UserProfile(
+        username="Alex",
+        allergies=["Chicken egg"],
+        dietary_restrictions=["Vegetarian"],
+        other=["G6PD"],
+        severity={
+            "Chicken egg": "HIGH",
+            "G6PD": "MED"
+        }
+    )
 
 
-def test_initialize_database_creates_missing_file(temp_database):
-    dm.initialize_database()
+@pytest.fixture
+def sample_audit_record():
+    """Create a reusable sample audit record."""
 
-    assert temp_database.exists()
-
-    with open(temp_database, "r") as file:
-        data = json.load(file)
-
-    assert data == {
-        "users": {},
-        "audit_logs": []
-    }
-
-def test_initialize_database_keeps_valid_database(temp_database):
-    original_data = {
-        "users": {"alex": {"username": "Alex", "restrictions": ["halal"]}},
-        "audit_logs": [{"dish": "Chicken Rice"}]
-    }
-
-    with open(temp_database, "w") as file:
-        json.dump(original_data, file)
-
-    dm.initialize_database()
-
-    with open(temp_database, "r") as file:
-        data = json.load(file)
-
-    assert data == original_data
-
-
-def test_initialize_database_resets_invalid_json(temp_database):
-    temp_database.write_text("{invalid json")
-
-    dm.initialize_database()
-
-    with open(temp_database, "r") as file:
-        data = json.load(file)
-
-    assert data == {"users": {}, "audit_logs": []}
-
-
-
-def test_initialize_database_resets_non_dictionary_json(temp_database):
-    temp_database.write_text(json.dumps(["not", "a", "dictionary"]))
-
-    dm.initialize_database()
-
-    with open(temp_database, "r") as file:
-        data = json.load(file)
-
-    assert data == {"users": {}, "audit_logs": []}
-
-
-@pytest.mark.parametrize(
-    "invalid_data",
-    [
-        {},
-        {"users": {}},
-        {"audit_logs": []},
-        {"users": [], "audit_logs": []},
-    ]
-)
-def test_initialize_database_resets_missing_or_invalid_structure(
-    temp_database, invalid_data
-):
-    with open(temp_database, "w") as file:
-        json.dump(invalid_data, file)
-
-    dm.initialize_database()
-
-    with open(temp_database, "r") as file:
-        data = json.load(file)
-
-    assert data == {"users": {}, "audit_logs": []}
-
-
-# -------------------------
-# create_default_db()
-# -------------------------
-
-def test_create_default_db_writes_default_structure(temp_database):
-    dm.create_default_db()
-
-    with open(temp_database, "r") as file:
-        data = json.load(file)
-
-    assert data == {"users": {}, "audit_logs": []}
-
-# -------------------------
-# load_database()
-# -------------------------
-
-def test_load_database_returns_database_contents(temp_database):
-    expected = {
-        "users": {"alex": {"username": "Alex", "restrictions": ["vegan"]}},
-        "audit_logs": [{"dish": "Salad", "risk_score": 0}]
-    }
-
-    with open(temp_database, "w") as file:
-        json.dump(expected, file)
-
-    result = dm.load_database()
-
-    assert result == expected
-
-
-def test_load_database_creates_file_if_missing(temp_database):
-    result = dm.load_database()
-
-    assert result == {"users": {}, "audit_logs": []}
-    assert temp_database.exists()
-
-
-# -------------------------
-# save_database()
-# -------------------------
-
-def test_save_database_writes_json(temp_database):
-    data = {
-        "users": {"sam": {"username": "Sam", "restrictions": ["kosher"]}},
-        "audit_logs": []
-    }
-
-    dm.save_database(data)
-
-    with open(temp_database, "r") as file:
-        saved_data = json.load(file)
-
-    assert saved_data == data
-
-
-def test_save_database_overwrites_old_contents(temp_database):
-    temp_database.write_text('{"old": true}')
-
-    new_data = {"users": {}, "audit_logs": []}
-    dm.save_database(new_data)
-
-    with open(temp_database, "r") as file:
-        saved_data = json.load(file)
-
-    assert saved_data == new_data
-
-# -------------------------
-# get_user_profile()
-# -------------------------
-
-def test_get_user_profile_returns_existing_user(temp_database):
-    dm.save_user_profile("Alex", ["halal"])
-
-    result = dm.get_user_profile("alex")
-
-    assert result == {
-        "username": "Alex",
-        "restrictions": ["halal"]
+    return {
+        "stall": "Test Chicken Rice Stall",
+        "dish": "Chicken Rice",
+        "is_safe": False,
+        "risk_level": "High",
+        "risk_score": 85,
+        "reasoning": "Contains a possible allergen.",
+        "allergy_conflicts": ["Chicken egg"],
+        "hidden_ingredients": ["Egg"],
+        "cross_contact_risks": ["Shared cooking equipment"],
+        "ingredient_tree": {"Rice": ["Water"]},
+        "dietary_status": {"Vegetarian": "Not suitable"},
+        "flags": ["Allergen detected"],
+        "stall_knowledge": "KNOWN",
+        "stall_specific_insights": "Uses shared equipment."
     }
 
 
-def test_get_user_profile_is_case_insensitive(temp_database):
-    dm.save_user_profile("AlEx", ["vegan"])
+# ==================================================
+# TestDataManagerInitialization
+# ==================================================
 
-    assert dm.get_user_profile("ALEX")["restrictions"] == ["vegan"]
+class TestDataManagerInitialization:
 
+    def test_data_manager_creates_serializer(self, data_manager):
+        from profile_serializer import ProfileSerializer
 
-def test_get_user_profile_returns_none_for_unknown_user(temp_database):
-    result = dm.get_user_profile("unknown")
+        assert isinstance(data_manager._serializer, ProfileSerializer)
 
-    assert result is None
+    def test_initialize_database_calls_init_db(
+        self, data_manager, monkeypatch
+    ):
+        mock_init = Mock()
 
-# -------------------------
-# save_user_profile()
-# -------------------------
+        monkeypatch.setattr(dm, "init_db", mock_init)
 
-def test_save_user_profile_creates_user(temp_database):
-    dm.save_user_profile("Alex", ["halal", "dairy-free"])
+        data_manager.initialize_database()
 
-    with open(temp_database, "r") as file:
-        data = json.load(file)
-
-    assert data["users"]["alex"] == {
-        "username": "Alex",
-        "restrictions": ["halal", "dairy-free"]
-    }
+        mock_init.assert_called_once()
 
 
-def test_save_user_profile_updates_existing_user(temp_database):
-    dm.save_user_profile("Alex", ["halal"])
-    dm.save_user_profile("ALEX", ["vegan"])
+# ==================================================
+# TestDataManagerUserProfiles
+# ==================================================
 
-    profile = dm.get_user_profile("alex")
+class TestDataManagerUserProfiles:
 
-    assert profile["username"] == "ALEX"
-    assert profile["restrictions"] == ["vegan"]
+    def test_save_and_get_user_profile(
+        self, data_manager, sample_profile
+    ):
+        data_manager.save_user_profile(sample_profile)
+
+        result = data_manager.get_user_profile("Alex")
+
+        assert isinstance(result, UserProfile)
+        assert result.username == "Alex"
+        assert result.items_in("allergies") == ["Chicken egg"]
+        assert result.items_in("dietary_restrictions") == ["Vegetarian"]
+        assert result.items_in("other") == ["G6PD"]
+
+    def test_get_user_profile_is_case_insensitive(
+        self, data_manager, sample_profile
+    ):
+        data_manager.save_user_profile(sample_profile)
+
+        result = data_manager.get_user_profile("aLeX")
+
+        assert result is not None
+        assert result.username == "Alex"
+
+    def test_get_user_profile_returns_none_for_unknown_user(
+        self, data_manager
+    ):
+        result = data_manager.get_user_profile("unknown")
+
+        assert result is None
+
+    def test_get_user_profile_returns_none_for_blank_username(
+        self, data_manager
+    ):
+        assert data_manager.get_user_profile("") is None
+        assert data_manager.get_user_profile("   ") is None
+
+    def test_save_user_profile_updates_existing_user(
+        self, data_manager
+    ):
+        original = UserProfile(
+            username="Alex",
+            dietary_restrictions=["Vegetarian"]
+        )
+
+        updated = UserProfile(
+            username="ALEX",
+            dietary_restrictions=["Vegan"]
+        )
+
+        data_manager.save_user_profile(original)
+        data_manager.save_user_profile(updated)
+
+        result = data_manager.get_user_profile("alex")
+
+        assert result.username == "Alex"
+        assert result.items_in("dietary_restrictions") == ["Vegan"]
+
+    def test_saving_profile_preserves_other_users(
+        self, data_manager
+    ):
+        alex = UserProfile("Alex", dietary_restrictions=["Halal"])
+        sam = UserProfile("Sam", dietary_restrictions=["Vegan"])
+
+        data_manager.save_user_profile(alex)
+        data_manager.save_user_profile(sam)
+
+        alex_updated = UserProfile(
+            "Alex",
+            dietary_restrictions=["Kosher"]
+        )
+
+        data_manager.save_user_profile(alex_updated)
+
+        assert data_manager.get_user_profile(
+            "Alex"
+        ).items_in("dietary_restrictions") == ["Kosher"]
+
+        assert data_manager.get_user_profile(
+            "Sam"
+        ).items_in("dietary_restrictions") == ["Vegan"]
+
+    def test_saved_profile_preserves_severity(
+        self, data_manager, sample_profile
+    ):
+        data_manager.save_user_profile(sample_profile)
+
+        result = data_manager.get_user_profile("Alex")
+
+        assert result.severity_label("Chicken egg") == "HIGH"
+        assert result.severity_label("G6PD") == "MED"
 
 
-def test_save_user_profile_preserves_audit_logs(temp_database):
-    dm.append_audit_log({"dish": "Noodles"})
-    dm.save_user_profile("Alex", ["vegan"])
+# ==================================================
+# TestDataManagerProfileValidation
+# ==================================================
 
-    db = dm.load_database()
+class TestDataManagerProfileValidation:
 
-    assert db["audit_logs"] == [{"dish": "Noodles"}]
-    assert "alex" in db["users"]
+    def test_save_user_profile_rejects_non_profile(
+        self, data_manager
+    ):
+        with pytest.raises(ValueError):
+            data_manager.save_user_profile({"username": "Alex"})
 
+    def test_save_user_profile_rejects_empty_username(
+        self, data_manager
+    ):
+        profile = UserProfile("   ")
 
-def test_save_user_profile_preserves_other_users(temp_database):
-    dm.save_user_profile("Alex", ["halal"])
-    dm.save_user_profile("Sam", ["vegan"])
-    dm.save_user_profile("Alex", ["kosher"])
-
-    db = dm.load_database()
-
-    assert db["users"]["alex"]["restrictions"] == ["kosher"]
-    assert db["users"]["sam"]["restrictions"] == ["vegan"]
-
-
-# -------------------------
-# append_audit_log()
-# -------------------------
-
-def test_append_audit_log_adds_record(temp_database):
-    record = {"dish": "Chicken Rice", "risk_score": 20}
-
-    dm.append_audit_log(record)
-
-    db = dm.load_database()
-
-    assert db["audit_logs"] == [record]
+        with pytest.raises(ValueError):
+            data_manager.save_user_profile(profile)
 
 
-def test_append_audit_log_preserves_existing_records(temp_database):
-    first = {"dish": "Salad", "risk_score": 0}
-    second = {"dish": "Noodles", "risk_score": 30}
+# ==================================================
+# TestDataManagerSearch
+# ==================================================
 
-    dm.append_audit_log(first)
-    dm.append_audit_log(second)
+class TestDataManagerSearch:
 
-    db = dm.load_database()
+    def test_search_user_profiles_by_partial_name(
+        self, data_manager
+    ):
+        data_manager.save_user_profile(UserProfile("Alex"))
+        data_manager.save_user_profile(UserProfile("Alexander"))
+        data_manager.save_user_profile(UserProfile("Sam"))
 
-    assert db["audit_logs"] == [first, second]
+        results = data_manager.search_user_profiles("Alex")
+
+        usernames = [profile.username for profile in results]
+
+        assert usernames == ["Alex", "Alexander"]
+
+    def test_search_user_profiles_is_case_insensitive(
+        self, data_manager
+    ):
+        data_manager.save_user_profile(UserProfile("Alexander"))
+
+        results = data_manager.search_user_profiles("alex")
+
+        assert len(results) == 1
+        assert results[0].username == "Alexander"
+
+    def test_search_user_profiles_returns_empty_for_no_match(
+        self, data_manager
+    ):
+        data_manager.save_user_profile(UserProfile("Alex"))
+
+        assert data_manager.search_user_profiles("unknown") == []
+
+    def test_search_user_profiles_returns_empty_for_blank_input(
+        self, data_manager
+    ):
+        assert data_manager.search_user_profiles("") == []
+        assert data_manager.search_user_profiles("   ") == []
+
+    def test_search_dietary_restriction(
+        self, data_manager
+    ):
+        data_manager.save_user_profile(
+            UserProfile("Alex", dietary_restrictions=["Vegetarian"])
+        )
+
+        data_manager.save_user_profile(
+            UserProfile("Sam", dietary_restrictions=["Vegan"])
+        )
+
+        results = data_manager.search_dietary_restriction("vegetarian")
+
+        assert len(results) == 1
+        assert results[0].username == "Alex"
+
+    def test_search_dietary_restriction_is_case_insensitive(
+        self, data_manager
+    ):
+        data_manager.save_user_profile(
+            UserProfile("Alex", allergies=["Chicken egg"])
+        )
+
+        results = data_manager.search_dietary_restriction("CHICKEN EGG")
+
+        assert len(results) == 1
+        assert results[0].username == "Alex"
+
+    def test_search_dietary_restriction_supports_partial_match(
+        self, data_manager
+    ):
+        data_manager.save_user_profile(
+            UserProfile("Alex", allergies=["Chicken egg"])
+        )
+
+        results = data_manager.search_dietary_restriction("egg")
+
+        assert len(results) == 1
+        assert results[0].username == "Alex"
+
+    def test_search_dietary_restriction_returns_empty_for_no_match(
+        self, data_manager
+    ):
+        data_manager.save_user_profile(
+            UserProfile("Alex", dietary_restrictions=["Vegetarian"])
+        )
+
+        assert data_manager.search_dietary_restriction("Halal") == []
+
+    def test_search_dietary_restriction_returns_empty_for_blank_input(
+        self, data_manager
+    ):
+        assert data_manager.search_dietary_restriction("") == []
+        assert data_manager.search_dietary_restriction("   ") == []
 
 
-def test_append_audit_log_preserves_users(temp_database):
-    dm.save_user_profile("Alex", ["halal"])
-    dm.append_audit_log({"dish": "Soup"})
+# ==================================================
+# TestDataManagerAuditLogs
+# ==================================================
 
-    db = dm.load_database()
+class TestDataManagerAuditLogs:
 
-    assert "alex" in db["users"]
-    assert db["audit_logs"] == [{"dish": "Soup"}]
+    def test_append_audit_log_creates_record(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
+
+        with dm.SessionLocal() as session:
+            audit = session.scalar(select(AuditLog))
+
+            assert audit is not None
+            assert audit.stall == "Test Chicken Rice Stall"
+            assert audit.dish == "Chicken Rice"
+            assert audit.is_safe is False
+            assert audit.risk_level == "High"
+            assert audit.risk_score == 85
+
+    def test_append_audit_log_creates_user_if_missing(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
+
+        result = data_manager.get_user_profile("Alex")
+
+        assert result is not None
+        assert result.username == "Alex"
+
+    def test_append_audit_log_preserves_restriction_snapshot(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
+
+        with dm.SessionLocal() as session:
+            audit = session.scalar(select(AuditLog))
+
+            assert audit.restrictions_snapshot == {
+                "allergies": ["Chicken egg"],
+                "dietary_restrictions": ["Vegetarian"],
+                "other": ["G6PD"],
+                "severity": {
+                    "Chicken egg": "HIGH",
+                    "G6PD": "MED"
+                }
+            }
+
+    def test_append_audit_log_preserves_nested_data(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
+
+        with dm.SessionLocal() as session:
+            audit = session.scalar(select(AuditLog))
+
+            assert audit.allergy_conflicts == ["Chicken egg"]
+            assert audit.hidden_ingredients == ["Egg"]
+            assert audit.cross_contact_risks == [
+                "Shared cooking equipment"
+            ]
+            assert audit.ingredient_tree == {"Rice": ["Water"]}
+            assert audit.dietary_status == {
+                "Vegetarian": "Not suitable"
+            }
+            assert audit.flags == ["Allergen detected"]
+
+    def test_append_multiple_audit_logs(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        second_record = {
+            **sample_audit_record,
+            "dish": "Fried Rice"
+        }
+
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
+
+        data_manager.append_audit_log(
+            sample_profile, second_record
+        )
+
+        with dm.SessionLocal() as session:
+            audits = session.scalars(select(AuditLog)).all()
+
+            assert len(audits) == 2
+
+    def test_append_audit_log_rejects_non_profile(
+        self, data_manager, sample_audit_record
+    ):
+        with pytest.raises(ValueError):
+            data_manager.append_audit_log(
+                {"username": "Alex"},
+                sample_audit_record
+            )
+
+    def test_append_audit_log_rejects_non_dictionary_record(
+        self, data_manager, sample_profile
+    ):
+        with pytest.raises(ValueError):
+            data_manager.append_audit_log(
+                sample_profile, "invalid record"
+            )
+
+    def test_append_audit_log_uses_empty_defaults(
+        self, data_manager, sample_profile
+    ):
+        data_manager.append_audit_log(
+            sample_profile,
+            {"dish": "Plain Rice"}
+        )
+
+        with dm.SessionLocal() as session:
+            audit = session.scalar(select(AuditLog))
+
+            assert audit.allergy_conflicts == []
+            assert audit.hidden_ingredients == []
+            assert audit.cross_contact_risks == []
+            assert audit.ingredient_tree == {}
+            assert audit.dietary_status == {}
+            assert audit.flags == []
 
 
-def test_append_audit_log_accepts_empty_dictionary(temp_database):
-    dm.append_audit_log({})
+# ==================================================
+# TestDataManagerAuditFiltering
+# ==================================================
 
-    db = dm.load_database()
+class TestDataManagerAuditFiltering:
 
-    assert db["audit_logs"] == [{}]
+    def test_filter_audit_history_by_restriction(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
 
+        results = data_manager.filter_audit_history_by_restrictions(
+            ["Chicken egg"]
+        )
 
-def test_append_audit_log_accepts_multiple_records(temp_database):
-    records = [
-        {"dish": "Dish A"},
-        {"dish": "Dish B"},
-        {"dish": "Dish C"},
-    ]
+        assert len(results) == 1
 
-    for record in records:
-        dm.append_audit_log(record)
+        audit, user = results[0]
 
-    assert dm.load_database()["audit_logs"] == records
+        assert audit.dish == "Chicken Rice"
+        assert user.username == "Alex"
+
+    def test_filter_audit_history_is_case_insensitive(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
+
+        results = data_manager.filter_audit_history_by_restrictions(
+            ["CHICKEN EGG"]
+        )
+
+        assert len(results) == 1
+
+    def test_filter_audit_history_matches_any_selected_restriction(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
+
+        results = data_manager.filter_audit_history_by_restrictions(
+            ["Vegan", "G6PD"]
+        )
+
+        assert len(results) == 1
+
+    def test_filter_audit_history_returns_empty_for_no_match(
+        self, data_manager, sample_profile, sample_audit_record
+    ):
+        data_manager.append_audit_log(
+            sample_profile, sample_audit_record
+        )
+
+        results = data_manager.filter_audit_history_by_restrictions(
+            ["Vegan"]
+        )
+
+        assert results == []
+
+    def test_filter_audit_history_returns_empty_when_no_records(
+        self, data_manager
+    ):
+        results = data_manager.filter_audit_history_by_restrictions(
+            ["Chicken egg"]
+        )
+
+        assert results == []

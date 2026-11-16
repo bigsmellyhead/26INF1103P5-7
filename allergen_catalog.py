@@ -27,23 +27,23 @@ KNOWN_DIETARY = {item.lower() for item in DIETARY_RESTRICTIONS}
 
 KNOWN_ITEMS = KNOWN_ALLERGENS | KNOWN_DIETARY
 
-def group_restrictions(restrictions):
-    ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "none"}
-    groups = {"allergies": [], "dietary_restrictions": [], "other": []}
+# def group_restrictions(restrictions):
+#     ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "none"}
+#     groups = {"allergies": [], "dietary_restrictions": [], "other": []}
 
-    for item in restrictions:
-        key = item.strip().lower()
-        if not key or key in ignored_keys:
-            continue
-        if key in KNOWN_ALLERGENS:
-            groups["allergies"].append(key)
-        elif key in KNOWN_DIETARY:
-            groups["dietary_restrictions"].append(key)
-        else:
-            groups["other"].append(key)
+#     for item in restrictions:
+#         key = item.strip().lower()
+#         if not key or key in ignored_keys:
+#             continue
+#         if key in KNOWN_ALLERGENS:
+#             groups["allergies"].append(key)
+#         elif key in KNOWN_DIETARY:
+#             groups["dietary_restrictions"].append(key)
+#         else:
+#             groups["other"].append(key)
  
 
-    return groups
+#     return groups
 
 #================Severity Section================
 SEVERITY_DESCRIPTIONS = {
@@ -73,26 +73,51 @@ def needs_severity(name): # Decides whether to ask the "How severely does this a
 
 def group_restrictions(restrictions, severity=None): #Sorts a flat list of names into the dictionary that gets saved to the database
     severity = severity or {}
-    ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "severity", "none"} #skipped
-    groups = {"allergies": [], "dietary_restrictions": [], "other": [], "severity": {}} 
 
-    for item in restrictions: #To put every name into the right list
+    # Normalise severity keys to lowercase.
+    normalised_severity = {
+        name.strip().lower(): level
+        for name, level in severity.items()
+        if isinstance(name, str)
+    }
+
+    ignored_keys = {
+        "allergies",
+        "dietary_restrictions",
+        "dietary restrictions",
+        "other",
+        "restrictions",
+        "severity",
+        "none"
+    }
+
+    groups = {
+        "allergies": [],
+        "dietary_restrictions": [],
+        "other": [],
+        "severity": {}
+    }
+
+    for item in restrictions:
         key = item.strip().lower()
+
         if not key or key in ignored_keys:
-            continue                                   #skip blanks and label words
+            continue
+
         if key in KNOWN_ALLERGENS:
-            groups["allergies"].append(key)            # in the allergen catalog
+            groups["allergies"].append(key)
         elif key in KNOWN_DIETARY:
-            groups["dietary_restrictions"].append(key) # halal, vegan, etc.
+            groups["dietary_restrictions"].append(key)
         else:
-            groups["other"].append(key)                # custom. typed in by the user
+            groups["other"].append(key)
 
-        # Keep Severity only for items that are actually in the profile
+    # Preserve severity for allergens and other restrictions.
     for name in groups["allergies"] + groups["other"]:
-        if name in severity:
-            groups["severity"][name] = severity[name]
+        if name in normalised_severity:
+            groups["severity"][name] = normalised_severity[name]
 
-    return groups    
+    return groups
+
 
 def create_restriction(name, severity=None):
     key = name.strip().lower() #key meaning the name of the item itself. Eg. Chicken Egg

@@ -1,605 +1,423 @@
+
 import pytest
 from unittest.mock import Mock
 
-import io_manager as io
-
-
-# --------------------------------------------------
-# Helper data
-# --------------------------------------------------
-
-def make_result(**overrides):
-    """Create a typical AI audit result for display tests."""
-    result = {
-        "stall_knowledge": "Known",
-        "stall_specific_insights": "The stall uses a shared cooking area.",
-        "risk_level": "Low",
-        "is_safe": True,
-        "risk_score": 10,
-        "reasoning": "No known conflicts were detected.",
-        "allergy_conflicts": [],
-        "dietary_status": {},
-        "cross_contact_risks": [],
-        "ingredient_tree": {
-            "name": "Chicken Rice",
-            "status": "Safe",
-            "conflict": None,
-            "children": [
-                {
-                    "name": "Chicken",
-                    "status": "Safe",
-                    "conflict": None,
-                    "children": [],
-                }
-            ],
-        },
-    }
-    result.update(overrides)
-    return result
-
-
-# --------------------------------------------------
-# parse_restrictions()
-# --------------------------------------------------
-
-@pytest.mark.parametrize(
-    "raw, expected",
-    [
-        ("Egg", ["egg"]),
-        ("Egg, Milk", ["egg", "milk"]),
-        (" Egg , MILK ", ["egg", "milk"]),
-        ("egg,,milk,", ["egg", "milk"]),
-        ("", ["none"]),
-        ("   ", ["none"]),
-        (" , , ", ["none"]),
-        ("Blue Berries", ["blue berries"]),
-    ],
-)
-def test_parse_restrictions(raw, expected):
-    assert io.parse_restrictions(raw) == expected
-
-
-# --------------------------------------------------
-# parse_number_list()
-# --------------------------------------------------
-
-@pytest.mark.parametrize(
-    "raw, maximum, expected",
-    [
-        ("1", 5, [1]),
-        ("1,3", 5, [1, 3]),
-        ("1 3", 5, [1, 3]),
-        ("1, 3 4", 5, [1, 3, 4]),
-        (" 2 , 4 ", 5, [2, 4]),
-        ("1,1", 5, [1, 1]),
-        ("", 5, None),
-        ("   ", 5, None),
-        ("abc", 5, None),
-        ("1,x", 5, None),
-        ("0", 5, None),
-        ("6", 5, None),
-        ("1,-2", 5, None),
-        ("1.5", 5, None),
-        ("1,,2", 5, [1, 2]),
-    ],
-)
-def test_parse_number_list(raw, maximum, expected):
-    assert io.parse_number_list(raw, maximum) == expected
-
-# --------------------------------------------------
-# print_user_restrictions()
-# --------------------------------------------------
-
-def test_print_user_restrictions(capsys):
-    io.print_user_restrictions({
-        "allergies": ["egg", "peanut"],
-        "dietary_restrictions": ["vegetarian"],
-        "others": ["g6pd"],
-    })
-
-    output = capsys.readouterr().out
-
-    assert "Allergies" in output
-    assert "egg" in output
-    assert "peanut" in output
-    assert "Dietary Restrictions" in output
-    assert "vegetarian" in output
-    assert "Others" in output
-    assert "g6pd" in output
+from io_manager import IOManager
+from UserProfile import UserProfile
 
 
-def test_print_user_restrictions_empty_lists(capsys):
-    io.print_user_restrictions({
-        "allergies": [],
-        "dietary_restrictions": [],
-        "others": [],
-    })
+# ==================================================
+# TEST FIXTURE
+# ==================================================
 
-    output = capsys.readouterr().out
+@pytest.fixture
+def setup_io_manager():
+    """Create an IOManager with a mocked DataManager."""
+    data_manager = Mock()
+    io_manager = IOManager(data_manager)
 
-    assert "Allergies: None" in output
-    assert "Dietary Restrictions: None" in output
-    assert "Others: None" in output
+    return io_manager, data_manager
 
 
-def test_print_user_restrictions_missing_keys(capsys):
-    io.print_user_restrictions({})
+# ==================================================
+# TestIOManagerAuthentication
+# ==================================================
 
-    output = capsys.readouterr().out
+class TestIOManagerAuthentication:
 
-    assert "Allergies: None" in output
-    assert "Dietary Restrictions: None" in output
-    assert "Others: None" in output
+    def test_is_admin_username(self):
+        assert IOManager.is_admin_username("ADMIN") is True
 
+    def test_normal_username_is_not_admin(self):
+        assert IOManager.is_admin_username("test_user") is False
 
-# --------------------------------------------------
-# print_risk_assessment()
-# --------------------------------------------------
+    def test_admin_username_is_case_sensitive(self):
+        assert IOManager.is_admin_username("admin") is False
 
-@pytest.mark.parametrize(
-    "level, color",
-    [
-        ("High", io.COLOR_RED),
-        ("Medium", io.COLOR_YELLOW),
-        ("Low", io.COLOR_GREEN),
-    ],
-)
-def test_print_risk_assessment_uses_correct_color(
-    level, color, capsys
-):
-    io.print_risk_assessment({
-        "risk_level": level,
-        "is_safe": False,
-        "risk_score": 85,
-        "reasoning": "A conflicting ingredient was detected.",
-    })
+    def test_admin_login_success(self, setup_io_manager, monkeypatch):
+        io_manager, _ = setup_io_manager
 
-    output = capsys.readouterr().out
+        monkeypatch.setattr(
+            "io_manager.pwinput",
+            lambda *args, **kwargs: "Admin123"
+        )
 
-    assert color in output
-    assert f"85% ({level})" in output
-    assert "NOT SAFE / AVOID" in output
-    assert "A conflicting ingredient was detected." in output
-    assert io.COLOR_RESET in output
+        monkeypatch.setattr(
+            io_manager,
+            "_run_admin_menu",
+            Mock()
+        )
 
+        io_manager.run_admin_login()
 
-def test_print_risk_assessment_safe_verdict(capsys):
-    io.print_risk_assessment({
-        "risk_level": "Low",
-        "is_safe": True,
-        "risk_score": 0,
-        "reasoning": "No known conflicts.",
-    })
+        io_manager._run_admin_menu.assert_called_once()
 
-    output = capsys.readouterr().out
+    def test_admin_login_wrong_password(
+        self, setup_io_manager, monkeypatch, capsys
+    ):
+        io_manager, _ = setup_io_manager
 
-    assert "SAFE TO EAT" in output
-    assert "NOT SAFE / AVOID" not in output
+        monkeypatch.setattr(
+            "io_manager.pwinput",
+            lambda *args, **kwargs: "wrong_password"
+        )
 
+        io_manager.run_admin_login()
 
-def test_print_risk_assessment_unknown_level(capsys):
-    io.print_risk_assessment({
-        "risk_level": "Unknown",
-        "is_safe": False,
-        "risk_score": 50,
-        "reasoning": "Insufficient information.",
-    })
+        assert "Invalid admin password" in capsys.readouterr().out
 
-    output = capsys.readouterr().out
 
-    assert "Risk Assessment: 50% (Unknown)" in output
-    assert "NOT SAFE / AVOID" in output
+# ==================================================
+# TestIOManagerProfileDisplay
+# ==================================================
 
+class TestIOManagerProfileDisplay:
 
-# --------------------------------------------------
-# print_allergy_conflicts()
-# --------------------------------------------------
+    def test_display_profile(self, setup_io_manager, capsys):
+        io_manager, _ = setup_io_manager
 
-def test_print_allergy_conflicts_empty(capsys):
-    io.print_allergy_conflicts({"allergy_conflicts": []})
-
-    output = capsys.readouterr().out
-
-    assert "DETECTED CONFLICTS: None" in output
-
-
-def test_print_allergy_conflicts_multiple(capsys):
-    io.print_allergy_conflicts({
-        "allergy_conflicts": ["Peanut", "Milk"],
-    })
-
-    output = capsys.readouterr().out
-
-    assert "DETECTED CONFLICTS:" in output
-    assert "Peanut" in output
-    assert "Milk" in output
-    assert output.count("[ALLERGY VIOLATION]") == 2
-
-
-def test_print_allergy_conflicts_missing_key(capsys):
-    io.print_allergy_conflicts({})
-
-    assert "DETECTED CONFLICTS: None" in capsys.readouterr().out
-# --------------------------------------------------
-# print_dietary_status()
-# --------------------------------------------------
-
-def test_print_dietary_status_empty(capsys):
-    io.print_dietary_status({"dietary_status": {}})
-
-    assert "DIETARY STATUS: None" in capsys.readouterr().out
-
-
-def test_print_dietary_status_values(capsys):
-    io.print_dietary_status({
-        "dietary_status": {
-            "Vegetarian": "Not suitable",
-            "Halal": "Unknown",
-        }
-    })
-
-    output = capsys.readouterr().out
-
-    assert "Vegetarian: Not suitable" in output
-    assert "Halal: Unknown" in output
-
-
-def test_print_dietary_status_missing_key(capsys):
-    io.print_dietary_status({})
-
-    assert "DIETARY STATUS: None" in capsys.readouterr().out
-
-
-# --------------------------------------------------
-# print_cross_contact_risks()
-# --------------------------------------------------
-
-def test_print_cross_contact_risks_empty(capsys):
-    io.print_cross_contact_risks({"cross_contact_risks": []})
-
-    assert "Cross-Contamination Risks: None" in (
-        capsys.readouterr().out
-    )
-
-
-def test_print_cross_contact_risks_multiple(capsys):
-    io.print_cross_contact_risks({
-        "cross_contact_risks": [
-            "Shared fryer",
-            "Shared utensils",
-        ]
-    })
-
-    output = capsys.readouterr().out
-
-    assert "Shared fryer" in output
-    assert "Shared utensils" in output
-    assert output.count("[ENVIRONMENTAL RISK]") == 2
-
-
-def test_print_cross_contact_risks_missing_key(capsys):
-    io.print_cross_contact_risks({})
-
-    assert "Cross-Contamination Risks: None" in (
-        capsys.readouterr().out
-    )
-
-# --------------------------------------------------
-# has_triggered_descendant()
-# --------------------------------------------------
-
-def test_has_triggered_descendant_direct_conflict():
-    node = {
-        "name": "Peanut sauce",
-        "status": "Trigger",
-        "conflict": "Peanut allergy",
-        "children": [],
-    }
-
-    assert io.has_triggered_descendant(node) is True
-
-
-def test_has_triggered_descendant_nested_conflict():
-    node = {
-        "name": "Dish",
-        "children": [
-            {
-                "name": "Sauce",
-                "status": "Safe",
-                "conflict": None,
-                "children": [
-                    {
-                        "name": "Peanut",
-                        "status": "Trigger",
-                        "conflict": "Peanut allergy",
-                        "children": [],
-                    }
-                ],
+        profile = UserProfile(
+            username="test_user",
+            allergies=["Egg"],
+            dietary_restrictions=["Vegetarian"],
+            other=["G6PD"],
+            severity={
+                "Egg": "HIGH",
+                "G6PD": "MED"
             }
-        ],
-    }
+        )
 
-    assert io.has_triggered_descendant(node) is True
+        io_manager._display_profile(profile)
+
+        output = capsys.readouterr().out
+
+        assert "Username: test_user" in output
+        assert "Allergies:" in output
+        assert "Egg" in output
+        assert "Dietary Restrictions:" in output
+        assert "Vegetarian" in output
+        assert "Other:" in output
+        assert "G6PD" in output
+
+    def test_display_empty_profile(self, setup_io_manager, capsys):
+        io_manager, _ = setup_io_manager
+
+        profile = UserProfile("new_user")
+
+        io_manager._display_profile(profile)
+
+        output = capsys.readouterr().out
+
+        assert "Username: new_user" in output
+        assert "Allergies: none" in output
+        assert "Dietary Restrictions: none" in output
+        assert "Other: none" in output
 
 
-def test_has_triggered_descendant_no_conflict():
-    node = {
-        "name": "Dish",
-        "status": "Safe",
-        "conflict": None,
-        "children": [
-            {
-                "name": "Rice",
-                "status": "Safe",
-                "conflict": None,
-                "children": [],
+# ==================================================
+# TestIOManagerProfileSearch
+# ==================================================
+
+class TestIOManagerProfileSearch:
+
+    def test_search_user_profiles(
+        self, setup_io_manager, monkeypatch, capsys
+    ):
+        io_manager, data_manager = setup_io_manager
+
+        profile = UserProfile("test_user")
+
+        monkeypatch.setattr(
+            "builtins.input",
+            lambda _: "test_user"
+        )
+
+        data_manager.search_user_profiles.return_value = [profile]
+
+        io_manager._search_user_profiles()
+
+        data_manager.search_user_profiles.assert_called_once_with(
+            "test_user"
+        )
+
+        assert "Username: test_user" in capsys.readouterr().out
+
+    def test_search_user_profiles_blank_input(
+        self, setup_io_manager, monkeypatch, capsys
+    ):
+        io_manager, data_manager = setup_io_manager
+
+        monkeypatch.setattr(
+            "builtins.input",
+            lambda _: "   "
+        )
+
+        io_manager._search_user_profiles()
+
+        assert "Username cannot be blank." in capsys.readouterr().out
+
+        data_manager.search_user_profiles.assert_not_called()
+
+    def test_search_user_profiles_no_results(
+        self, setup_io_manager, monkeypatch, capsys
+    ):
+        io_manager, data_manager = setup_io_manager
+
+        monkeypatch.setattr(
+            "builtins.input",
+            lambda _: "unknown"
+        )
+
+        data_manager.search_user_profiles.return_value = []
+
+        io_manager._search_user_profiles()
+
+        assert "No matching user profiles found." in (
+            capsys.readouterr().out
+        )
+
+    def test_search_dietary_restriction(
+        self, setup_io_manager, monkeypatch, capsys
+    ):
+        io_manager, data_manager = setup_io_manager
+
+        profile = UserProfile("test_user")
+
+        monkeypatch.setattr(
+            "builtins.input",
+            lambda _: "egg"
+        )
+
+        data_manager.search_dietary_restriction.return_value = [profile]
+
+        io_manager._search_dietary_restriction()
+
+        data_manager.search_dietary_restriction.assert_called_once_with(
+            "egg"
+        )
+
+        assert "Username: test_user" in capsys.readouterr().out
+
+    def test_search_dietary_restriction_blank_input(
+        self, setup_io_manager, monkeypatch, capsys
+    ):
+        io_manager, data_manager = setup_io_manager
+
+        monkeypatch.setattr(
+            "builtins.input",
+            lambda _: " "
+        )
+
+        io_manager._search_dietary_restriction()
+
+        assert "Restriction keyword cannot be blank." in (
+            capsys.readouterr().out
+        )
+
+        data_manager.search_dietary_restriction.assert_not_called()
+
+
+# ==================================================
+# TestIOManagerRestrictionEditing
+# ==================================================
+
+class TestIOManagerRestrictionEditing:
+
+    def test_edit_restrictions_updates_profile(
+        self, setup_io_manager, monkeypatch
+    ):
+        io_manager, data_manager = setup_io_manager
+
+        profile = UserProfile("test_user")
+
+        monkeypatch.setattr(
+            io_manager,
+            "prompt_for_restrictions",
+            lambda current=None: ["Chicken Egg", "Vegetarian", "G6PD"]
+        )
+
+        monkeypatch.setattr(
+            io_manager,
+            "prompt_for_severity",
+            lambda names, current=None: {
+                "Chicken Egg": "HIGH",
+                "G6PD": "MED"
             }
-        ],
-    }
+        )
 
-    assert io.has_triggered_descendant(node) is False
+        monkeypatch.setattr(
+            io_manager,
+            "print_severity_summary",
+            lambda restrictions: None
+        )
 
+        io_manager._edit_restrictions(profile)
 
-def test_has_triggered_descendant_trigger_without_conflict():
-    node = {
-        "name": "Dish",
-        "status": "Trigger",
-        "conflict": None,
-        "children": [],
-    }
+        assert profile.username == "test_user"
 
-    # A Trigger status alone is not enough for this function.
-    assert io.has_triggered_descendant(node) is False
+        # The catalogue normalises restriction names to lowercase.
+        assert profile.items_in("allergies") == ["chicken egg"]
+        assert profile.items_in("dietary_restrictions") == ["vegetarian"]
+        assert profile.items_in("other") == ["g6pd"]
 
-# --------------------------------------------------
-# print_children_tree()
-# --------------------------------------------------
+        assert profile.severity_of("chicken egg") == "HIGH"
+        assert profile.severity_of("g6pd") == "MED"
 
-def test_print_children_tree_single_child(capsys):
-    tree = {
-        "name": "Dish",
-        "children": [
-            {
-                "name": "Rice",
-                "status": "Safe",
-                "conflict": None,
-                "children": [],
-            }
-        ],
-    }
-
-    io.print_children_tree(tree)
-
-    output = capsys.readouterr().out
-
-    assert "└── Rice" in output
-    assert "(Safe)" in output
-    assert io.COLOR_GREEN in output
+        # Confirm the existing profile object was updated, not replaced.
+        assert isinstance(profile, UserProfile)
 
 
-def test_print_children_tree_trigger_conflict_is_red(capsys):
-    tree = {
-        "name": "Dish",
-        "children": [
-            {
-                "name": "Peanut sauce",
-                "status": "Trigger",
-                "conflict": "Peanut allergy",
-                "children": [],
-            }
-        ],
-    }
+# ==================================================
+# TestIOManagerAdminSearch
+# ==================================================
 
-    io.print_children_tree(tree)
+class TestIOManagerAdminSearch:
 
-    output = capsys.readouterr().out
+    def test_filter_input_returns_selected_restrictions(
+        self, setup_io_manager, monkeypatch
+    ):
+        io_manager, _ = setup_io_manager
 
-    assert "Peanut sauce" in output
-    assert "[Trigger: Peanut allergy]" in output
-    assert io.COLOR_RED in output
+        monkeypatch.setattr(
+            io_manager,
+            "prompt_for_restrictions",
+            lambda: ["Egg", "Milk"]
+        )
 
+        result = io_manager._get_audit_filter_input()
 
-def test_print_children_tree_nested_child(capsys):
-    tree = {
-        "name": "Dish",
-        "children": [
-            {
-                "name": "Sauce",
-                "status": "Safe",
-                "conflict": None,
-                "children": [
-                    {
-                        "name": "Peanut",
-                        "status": "Trigger",
-                        "conflict": "Peanut allergy",
-                        "children": [],
-                    }
-                ],
-            }
-        ],
-    }
+        assert result == ["Egg", "Milk"]
 
-    io.print_children_tree(tree)
+    def test_filter_input_returns_none_when_empty(
+        self, setup_io_manager, monkeypatch
+    ):
+        io_manager, _ = setup_io_manager
 
-    output = capsys.readouterr().out
+        monkeypatch.setattr(
+            io_manager,
+            "prompt_for_restrictions",
+            lambda: ["none"]
+        )
 
-    assert "Sauce" in output
-    assert "Peanut" in output
-    assert "[Trigger: Peanut allergy]" in output
+        assert io_manager._get_audit_filter_input() is None
 
+    def test_display_filtered_history_empty(
+        self, setup_io_manager, capsys
+    ):
+        io_manager, _ = setup_io_manager
 
-def test_print_children_tree_stall_insight(capsys):
-    tree = {
-        "name": "Dish",
-        "children": [
-            {
-                "name": "Chicken",
-                "status": "Safe",
-                "conflict": None,
-                "children": [],
-                "stall_insight": "Cooked separately on request.",
-            }
-        ],
-    }
+        io_manager._display_filtered_audit_history(
+            [],
+            ["Egg"]
+        )
 
-    io.print_children_tree(tree)
+        assert "No audit history found" in capsys.readouterr().out
 
-    output = capsys.readouterr().out
+    def test_display_filtered_history_with_records(
+        self, setup_io_manager, capsys
+    ):
+        io_manager, _ = setup_io_manager
 
-    assert "Stall: Cooked separately on request." in output
-    assert io.COLOR_YELLOW in output
+        audit = Mock()
+        audit.created_at = "2026-11-16"
+        audit.stall = "Test Stall"
+        audit.dish = "Chicken Rice"
+        audit.is_safe = True
+        audit.risk_level = "Low"
 
+        user = Mock()
+        user.username = "test_user"
 
-def test_print_children_tree_empty_children(capsys):
-    io.print_children_tree({"name": "Dish", "children": []})
+        io_manager._display_filtered_audit_history(
+            [(audit, user)],
+            ["Egg"]
+        )
 
-    assert capsys.readouterr().out == ""
+        output = capsys.readouterr().out
+
+        assert "2026-11-16" in output
+        assert "test_user" in output
+        assert "Test Stall" in output
+        assert "Chicken Rice" in output
+        assert "True" in output
+        assert "Low" in output
 
 
-# --------------------------------------------------
-# print_ingredient_breakdown_tree()
-# --------------------------------------------------
+# ==================================================
+# TestIOManagerUserInputs
+# ==================================================
 
-def test_print_ingredient_breakdown_tree_none():
-    # Empty result data should return without printing.
-    assert io.print_ingredient_breakdown_tree(None) is None
+class TestIOManagerUserInputs:
 
+    def test_get_user_inputs_strips_whitespace(
+        self, setup_io_manager, monkeypatch
+    ):
+        io_manager, _ = setup_io_manager
 
-def test_print_ingredient_breakdown_tree_valid(capsys):
-    io.print_ingredient_breakdown_tree({
-        "ingredient_tree": {
-            "name": "Chicken Rice",
-            "children": [
-                {
-                    "name": "Chicken",
-                    "status": "Safe",
-                    "conflict": None,
-                    "children": [],
-                }
-            ],
-        }
-    })
+        answers = iter([
+            "  Maxwell Food Centre  ",
+            "  Chicken Rice  "
+        ])
 
-    output = capsys.readouterr().out
+        monkeypatch.setattr(
+            "builtins.input",
+            lambda _: next(answers)
+        )
 
-    assert "FULL INGREDIENT BREAKDOWN" in output
-    assert "Dish: Chicken Rice" in output
-    assert "Chicken" in output
+        stall, dish = io_manager.get_user_inputs()
 
-# --------------------------------------------------
-# display_audit_result()
-# --------------------------------------------------
+        assert stall == "Maxwell Food Centre"
+        assert dish == "Chicken Rice"
 
-def test_display_audit_result_contains_main_sections(capsys):
-    io.display_audit_result(
-        "test_user",
-        "Test Stall",
-        "Chicken Rice",
-        {
-            "allergies": ["egg"],
-            "dietary_restrictions": ["vegetarian"],
-            "others": ["g6pd"],
-        },
-        make_result(),
-    )
+    def test_get_user_inputs_allows_empty_strings(
+        self, setup_io_manager, monkeypatch
+    ):
+        io_manager, _ = setup_io_manager
 
-    output = capsys.readouterr().out
+        answers = iter(["", ""])
 
-    assert "DISH SAFETY AUDIT" in output
-    assert "[USERNAME] test_user" in output
-    assert "[DISH] Chicken Rice" in output
-    assert "[LOCATION/STALL] Test Stall" in output
-    assert "STALL STATUS: Known" in output
-    assert "SAFE TO EAT" in output
-    assert "FULL INGREDIENT BREAKDOWN" in output
-    assert "ADVISORY DISCLAIMER" in output
-    assert "Always verify with store owners" in output
+        monkeypatch.setattr(
+            "builtins.input",
+            lambda _: next(answers)
+        )
+
+        stall, dish = io_manager.get_user_inputs()
+
+        assert stall == ""
+        assert dish == ""
 
 
-@pytest.mark.parametrize(
-    "knowledge, expected_emoji",
-    [
-        ("Known", "🟢"),
-        ("Inferred", "🟡"),
-        ("Unknown", "🔴"),
-    ],
-)
-def test_display_audit_result_stall_status(
-    knowledge, expected_emoji, capsys
-):
-    io.display_audit_result(
-        "user",
-        "stall",
-        "dish",
-        {},
-        make_result(stall_knowledge=knowledge),
-    )
+# ==================================================
+# TestIOManagerAuditDisplay
+# ==================================================
 
-    assert expected_emoji in capsys.readouterr().out
+class TestIOManagerAuditDisplay:
 
+    def test_display_audit_result_delegates_to_renderer(
+        self, setup_io_manager
+    ):
+        io_manager, _ = setup_io_manager
 
-def test_display_audit_result_displays_conflicts(capsys):
-    io.display_audit_result(
-        "user",
-        "stall",
-        "dish",
-        {},
-        make_result(
-            is_safe=False,
-            risk_level="High",
-            risk_score=95,
-            allergy_conflicts=["Peanut"],
-            cross_contact_risks=["Shared fryer"],
-        ),
-    )
+        # Replace the renderer with a mock.
+        renderer = Mock()
+        io_manager._IOManager__audit_renderer = renderer
 
-    output = capsys.readouterr().out
+        result = Mock()
 
-    assert "NOT SAFE / AVOID" in output
-    assert "Peanut" in output
-    assert "Shared fryer" in output
+        io_manager.display_audit_result(result)
 
-# --------------------------------------------------
-# get_user_inputs()
-# --------------------------------------------------
-
-def test_get_user_inputs_strips_whitespace(monkeypatch):
-    answers = iter([
-        "  Maxwell Food Centre  ",
-        "  Chicken Rice  ",
-    ])
-    monkeypatch.setattr("builtins.input", lambda _: next(answers))
-
-    stall, dish = io.get_user_inputs()
-
-    assert stall == "Maxwell Food Centre"
-    assert dish == "Chicken Rice"
+        renderer.render_sections.assert_called_once_with(result)
 
 
-def test_get_user_inputs_allows_empty_strings(monkeypatch):
-    answers = iter(["", ""])
-    monkeypatch.setattr("builtins.input", lambda _: next(answers))
+# ==================================================
+# TestIOManagerErrorDisplay
+# ==================================================
 
-    stall, dish = io.get_user_inputs()
+class TestIOManagerErrorDisplay:
 
-    # Documents current behavior: empty values are not rejected.
-    assert stall == ""
-    assert dish == ""
+    def test_display_error(self, setup_io_manager, capsys):
+        io_manager, _ = setup_io_manager
 
-# --------------------------------------------------
-# AI error display helpers
-# --------------------------------------------------
+        io_manager.display_error("Temporary AI error")
 
-def test_display_api_key_error(capsys):
-    io.display_api_key_error()
-
-    assert "GEMINI_API_KEY is not set" in capsys.readouterr().out
-
-
-def test_display_attempt_error(capsys):
-    io.display_attempt_error(2, 3, "Temporary error")
-
-    output = capsys.readouterr().out
-
-    assert "Attempt 2/3 failed" in output
-    assert "Temporary error" in output
+        assert "Temporary AI error" in capsys.readouterr().out
