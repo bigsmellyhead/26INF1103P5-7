@@ -3,6 +3,10 @@ from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS
 #The File for the Menu | What the user inputs to tick the options
 
 class RestrictionMenu: 
+    __entries: list
+    __selected: set
+    __custom_items: list
+    
     def __init__(self, current=None):
         # Every entry: (group header, menu title, list of items)
         self.__entries = [("Allergies", category, list(items)) for category, items in ALLERGEN_CATALOG.items()]

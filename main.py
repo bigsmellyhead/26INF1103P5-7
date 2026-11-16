@@ -34,9 +34,6 @@ def main():
             # Query LLM API
             ai_output = ai_manager.query_ai_safety_auditor(stall, dish, profile)
 
-
-
-
             if ai_output is None:
                 raise ValueError(
                     "The AI could not complete this audit after several "
@@ -46,20 +43,6 @@ def main():
         # LogicManager checks the api reply against the user's reaction severity levels and sets the final risk score
             processed_data = logic_manager.validate_and_process_logic(AIAuditData(profile, stall, dish, ai_output))
             
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             # Save audit record to MySQL
             data_manager.append_audit_log(profile, processed_data.to_dict())
 

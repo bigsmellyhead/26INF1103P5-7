@@ -56,9 +56,8 @@ class OutputSchema:
     #These keys must be included in the API reply
     "required": ["name", "status", "conflict", "stall_insight", "children"],
     }
-
+       
     # This schema node should enforce the first level of the output tree which shows the dish. It holds a 'children' key which values is in a array. Its schema is defined in the component_node_schema dictionary
-
     ingredient_tree_schema = {
         "type": "OBJECT",
         "properties": {
@@ -74,7 +73,7 @@ class OutputSchema:
         #These keys must be included in the API reply
         "required": ["name", "status", "conflict", "stall_insight", "children"],
     }
-
+    
     # Enforces the reply to be in this JSON structure with every key in the "required" list, using the types listed in the dictionary.(etc string,boolean,integers and enum values depending on what is specified, such as low,medium,high)
     ai_output_schema = {
         "type": "OBJECT",

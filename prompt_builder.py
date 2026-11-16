@@ -48,7 +48,6 @@ class PromptBuilder:
     - Dietary/religious requirements have no severity: NON-COMPLIANT is High; UNCERTAIN is at least Medium.
     - is_safe is true ONLY if risk_level is "Low".
 
-
     OUTPUT RULES (the JSON structure is enforced separately; these rules cover the content)
     Say each fact ONCE, in the one field that owns it. Never repeat it in another field.
     - NEVER state who owns or runs a stall, the owners' religion, or that a stall holds any certification (halal, etc.), unless it is a major chain whose certification is widely documented. You cannot see certificates. Describe cuisine style, not people.

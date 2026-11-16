@@ -23,6 +23,7 @@ class IOManager:
 
     # Composes a audit renderer that helps to render all sections
     __audit_renderer: AuditReportRenderer
+    __data_manager: DataManager
 
     def __init__(self, data_manager: DataManager):
         self.__data_manager = data_manager
@@ -107,17 +108,6 @@ class IOManager:
                 items.append(f"{item} ({level})" if level else item)
 
             print(f"  {category.replace('_', ' ').title()}: {', '.join(items) or 'none'}")
-
-
-
-
-
-
-
-
-
-
-
 
     # Get category selection
     def _get_audit_filter_input(self):
@@ -361,12 +351,6 @@ class IOManager:
                 # --- User wants to change their restrictions (menu opens pre-ticked) ---
                 self._edit_restrictions(profile)
                 saved = profile.all_restriction_names()
-
-
-
-
-
-
 
                 print(f"\nProfile updated! Saved {len(saved)} restriction(s): {', '.join(saved) or 'none'}")
             else:
