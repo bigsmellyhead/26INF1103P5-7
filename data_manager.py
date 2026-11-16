@@ -3,7 +3,7 @@ from sqlalchemy import select, func
 
 from database.database import SessionLocal, init_db
 from database.models import User, AuditLog
-from UserProfile import UserProfile
+from models.UserProfile import UserProfile
 from profile_serializer import ProfileSerializer
 
 

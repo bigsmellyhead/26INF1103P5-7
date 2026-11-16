@@ -1,9 +1,9 @@
 # logic_manager.py
 from Data import AIAuditData, ResultAuditData
-from UserProfile import UserProfile
+from models.UserProfile import UserProfile
 from ingredient_tree_processor import IngredientTreeProcessor
 from severity_policy import SeverityPolicy
-from severity_level import SeverityLevel
+from models.severity_level import SeverityLevel
 
 # Takes the AI's already-validated record (schema checks are in ai_manager.py) plus the user's profile,
 # applies deterministic business rules and returns the final ResultAuditData.

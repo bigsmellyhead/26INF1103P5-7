@@ -5,7 +5,7 @@
 #   deserialize: database dict  -> UserProfile object   (when loading)
 #   serialize:   UserProfile    -> database dict        (only when saving)
 
-from UserProfile import UserProfile
+from models.UserProfile import UserProfile
 from severity_policy import SeverityPolicy
 
 

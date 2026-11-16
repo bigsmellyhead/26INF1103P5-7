@@ -1,7 +1,7 @@
 # severity_policy.py
 
-from severity_level import SeverityLevel
-from allergen_catalog import DEFAULT_SEVERITY
+from models.severity_level import SeverityLevel
+from allergen_catalog import AllergenCatalog
 
 
 class SeverityPolicy:
@@ -27,6 +27,11 @@ class SeverityPolicy:
 
     _RANK = {SeverityLevel.LOW: 1, SeverityLevel.MED: 2, SeverityLevel.HIGH: 3}
 
+    def __init__(self):
+        # The level assumed when a severity is missing or not recognised.
+        # It is read from the catalog so the value is only written in one place.
+        self._default_severity = AllergenCatalog().default_severity()
+
     def normalise(self, level) -> SeverityLevel:
         # If the SeverityLevel is not recognised/missing/unknown, the default severity is HIGH
         if isinstance(level, SeverityLevel):
@@ -38,7 +43,7 @@ class SeverityPolicy:
                 return SeverityLevel(text)
             except ValueError:
                 pass
-        return DEFAULT_SEVERITY
+        return self._default_severity
 
     def normalise_presence(self, presence) -> str:
         # Unknown presence is treated as CONFIRMED - as per our business rules
@@ -50,7 +55,7 @@ class SeverityPolicy:
         # If list is empty or severity was not specified for the allergen - HIGH is the default severity 
         cleaned = [self.normalise(level) for level in levels]
         if not cleaned:
-            return DEFAULT_SEVERITY
+            return self._default_severity
         return max(cleaned, key=lambda level: self._RANK[level])
 
     def floor_for(self, severity, presence) -> int:
