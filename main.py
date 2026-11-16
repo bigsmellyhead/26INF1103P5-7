@@ -1,8 +1,8 @@
-
 from io_manager import IOManager
 from ai_manager import AIManager
 from logic_manager import LogicManager
 from data_manager import DataManager
+
 from Data import AIAuditData
 def main():
 
@@ -18,6 +18,7 @@ def main():
 
   #login/register, collects users profile and dietry restriction
     profile = io_manager.handle_user_authentication()
+
 
 
     while True:

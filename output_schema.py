@@ -123,5 +123,4 @@ class OutputSchema:
             "ingredient_tree",
         ],
     }
-        
- 
+

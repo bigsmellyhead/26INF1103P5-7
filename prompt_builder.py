@@ -105,7 +105,7 @@ class PromptBuilder:
         allergies = self._sanitise(allergies)
         dietary = self._sanitise(dietary)
         other = self._sanitise(other)
-        
+
 
         user_data = f"""
             <stall>{stall}</stall>
@@ -117,6 +117,4 @@ class PromptBuilder:
             </restrictions>
             """
         return user_data
-
-        
 

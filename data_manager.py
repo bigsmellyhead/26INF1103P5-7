@@ -7,9 +7,9 @@ from UserProfile import UserProfile
 from profile_serializer import ProfileSerializer
 
 
-# data_manager is the only class that has access to the database through SQLAlchemy. 
-# Profiles are serialized/deserialized at the border, the rest of the code never sees raw data.
-# After deserialization, rest of the code retrieves UserProfile objects, which are immutable and do not know about the database.
+# DataManager is the only class that talks to MySQL.
+# Profiles go OUT as UserProfile objects and come IN as UserProfile objects;
+# the serializer converts at the border. ORM User rows never leave this class.
 
 class DataManager:
 
@@ -17,23 +17,24 @@ class DataManager:
         # Composition: DataManager creates and owns its serializer
         self._serializer = ProfileSerializer()
 
-    # creates the database tables if they do not exist yet. Does not delete existing data.
     def initialize_database(self):
         """Initialize the MySQL database tables."""
         init_db()
 
-    # find user by username, returns None if not found. Case-insensitive.
+    # ---------- private helpers ----------
+
     def _find_user(self, session, username):
         return session.scalar(
             select(User).where(func.lower(User.username) == username.strip().lower())
         )
 
-    # takes user object from database, coverts to UserProfile object. Returns None if user is None.
     def _to_profile(self, user) -> UserProfile:
         return self._serializer.deserialize(user.username, user.restrictions)
 
-    # load a user's profile as a UserProfile object, or None if they are new.
+    # ---------- profiles ----------
+
     def get_user_profile(self, username):
+        """Load a user's profile as a UserProfile object, or None if they are new."""
         if not username or not username.strip():
             return None
 
@@ -43,8 +44,8 @@ class DataManager:
                 return None
             return self._to_profile(user)
 
-    # Register a new user or update their restrictions (serialize only here).
     def save_user_profile(self, profile: UserProfile):
+        """Register a new user or update their restrictions (serialize only here)."""
         if not isinstance(profile, UserProfile):
             raise ValueError("save_user_profile expects a UserProfile.")
         if not profile.username or not profile.username.strip():
@@ -59,9 +60,10 @@ class DataManager:
             else:
                 user.restrictions = restrictions
 
-    
-    # adds a new audit record to the database
+    # ---------- audit log ----------
+
     def append_audit_log(self, profile: UserProfile, audit_record: dict):
+        """Save an audit result. The restrictions snapshot (incl. severity) comes from the profile."""
         if not isinstance(profile, UserProfile):
             raise ValueError("append_audit_log expects a UserProfile.")
         if not isinstance(audit_record, dict):
@@ -96,9 +98,10 @@ class DataManager:
                 stall_specific_insights=audit_record.get("stall_specific_insights"),
             ))
 
-    # Below are functions used for admin seaches
-    # search by username, returns UserProfile objects. Case-insensitive partial match.
+    # ---------- admin searches ----------
+
     def search_user_profiles(self, name):
+        """Find user profiles by a partial username match. Returns UserProfile objects."""
         if not name or not name.strip():
             return []
 
@@ -110,8 +113,8 @@ class DataManager:
             ).all()
             return [self._to_profile(user) for user in users]
 
-    # search for users who have a matching allergy or dietary restriction. Returns UserProfile objects.
     def search_dietary_restriction(self, restriction):
+        """Find users who have a matching allergy or dietary restriction. Returns UserProfile objects."""
         if not restriction or not restriction.strip():
             return []
 
@@ -125,8 +128,8 @@ class DataManager:
             if any(search_term in item.casefold() for item in profile.all_restriction_names())
         ]
 
-    # filter audit history by selected restrictions, returns list of (AuditLog, User) tuples.
     def filter_audit_history_by_restrictions(self, selected_items):
+        """Find audit records containing any selected restriction."""
         matches = []
         selected_lower = {item.casefold() for item in selected_items}
 

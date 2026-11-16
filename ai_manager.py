@@ -67,6 +67,4 @@ class AIManager:
                 self.__print_error(error_msg)
                 if attempt < self._max_tries:
                     time.sleep(2 * attempt)   # wait 2s after the 1st failure, 4s after the 2nd
-                
 
-        return None
