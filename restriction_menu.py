@@ -1,22 +1,18 @@
-from allergen_catalog import ALLERGEN_CATALOG, DIETARY_RESTRICTIONS, KNOWN_ITEMS
+from allergen_catalog import AllergenCatalog
 
 #The File for the Menu | What the user inputs to tick the options
 
 class RestrictionMenu: 
-    __entries: list
-    __selected: set
-    __custom_items: list
-    
-    def __init__(self, current=None):
+    def __init__(self, catalog: AllergenCatalog, current=None):
         # Every entry: (group header, menu title, list of items)
-        self.__entries = [("Allergies", category, list(items)) for category, items in ALLERGEN_CATALOG.items()]
-        self.__entries.append(("Restrictions", "Dietary / Religious", list(DIETARY_RESTRICTIONS)))
+        self.__entries = [("Allergies", category, items) for category, items in catalog.categories().items()]
+        self.__entries.append(("Restrictions", "Dietary / Religious", catalog.dietary_options()))
 
         # Continue saved user previous profile. New profile for new users
         self.__selected = {name.strip().lower() for name in (current or []) if name and name != "none"}
 
         # Items saved earlier that is not in catalog is kept other "Other"
-        self.__custom_items = sorted(name for name in self.__selected if name not in KNOWN_ITEMS)
+        self.__custom_items = sorted(name for name in self.__selected if not catalog.is_known(name))
 
     @property
     def entries(self) -> list:
@@ -83,4 +79,3 @@ class RestrictionMenu:
     #split commas seperated input and into lowercase
     def __split_by_commas(self, raw_text: str) -> list:
         return [part.strip().lower() for part in raw_text.split(",") if part.strip()]
-
