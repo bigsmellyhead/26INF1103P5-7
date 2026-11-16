@@ -12,7 +12,7 @@ import utils
 from collections.abc import Callable
 from Data import ResultAuditData
 from UserProfile import UserProfile
-from allergen_catalog import create_restriction, needs_severity, SEVERITY_DESCRIPTIONS, group_restrictions
+from allergen_catalog import AllergenCatalog
 from audit_report_renderer import AuditReportRenderer
 from sections import (HeaderSection, UserSummarySection, StallInsightSection, RiskAssessmentSection,
 AllergyConflictSection, DietaryStatusSection, CrossContactSection, IngredientBreakdownSection,
@@ -24,9 +24,12 @@ class IOManager:
     # Composes a audit renderer that helps to render all sections
     __audit_renderer: AuditReportRenderer
     __data_manager: DataManager
+    # Catalog of allergens, dietary options and severity
+    __catalog: AllergenCatalog
 
     def __init__(self, data_manager: DataManager):
         self.__data_manager = data_manager
+        self.__catalog = AllergenCatalog()
         self.__audit_renderer = AuditReportRenderer(
             [
                 HeaderSection(),
@@ -260,7 +263,7 @@ class IOManager:
     def prompt_for_restrictions(self, current=None):
         # --- Prompts the user for Restrictions via the category menu and Returns them ---
         """Walks the user through the allergen menu. Returns a clean list, or ['none']."""
-        menu = RestrictionMenu(current)
+        menu = RestrictionMenu(self.__catalog, current)
 
         while True:
             self.show_category_menu(menu)
@@ -297,7 +300,7 @@ class IOManager:
         self.print_severity_summary(restrictions)
 
         # Convert restriction names into the format UserProfile expects
-        groups = group_restrictions(names, severity)
+        groups = self.__catalog.group_restrictions(names, severity)
 
         # Update the SAME profile object
         profile.set_restrictions(
@@ -405,7 +408,7 @@ class IOManager:
         current = current or {}
         severity = {}
 
-        already_rated = [name for name in names if needs_severity(name) and name in current]
+        already_rated = [name for name in names if self.__catalog.needs_severity(name) and name in current]
         change_saved = False
         if already_rated:
             print(f"\nYou already have severity level saved for: {', '.join(already_rated)}")
@@ -417,7 +420,7 @@ class IOManager:
             change_saved = (answer == 'y')
 
         for name in names: #name means the Allergy name itself
-            if not needs_severity(name):
+            if not self.__catalog.needs_severity(name):
                 continue
             previous = current.get(name)
 
@@ -426,7 +429,7 @@ class IOManager:
                 continue
 
             print(f"\nHow severely does ({name}) affect you?")
-            for number, (level, text) in enumerate(SEVERITY_DESCRIPTIONS.items(), start=1):
+            for number, (level, text) in enumerate(self.__catalog.severity_descriptions().items(), start=1):
                 print(f"    {number}. {level:<4} - {text}")
             hint = f"   (Enter = keep {previous})" if previous else ""
             while True:
@@ -441,7 +444,7 @@ class IOManager:
         return severity    
 
     def build_restrictions(self, names, severity): #Takes the list of ticked names and turn each one into a restriction object, turning them into a set.
-        return {create_restriction(n, severity.get(n)) for n in names if n != "none"}
+        return {self.__catalog.create_restriction(n, severity.get(n)) for n in names if n != "none"}
 
     def print_severity_summary(self, restrictions): #Check every item passes the check and prints the severity line
         for r in sorted(restrictions, key=lambda r: r.name):
@@ -449,3 +452,4 @@ class IOManager:
             if level:
                 print(f"Severity for ({r.name}): {level.title()}")
 
+                
