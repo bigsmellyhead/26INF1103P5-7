@@ -1,6 +1,6 @@
 
-from Restriction import Restriction
-from severity_level import SeverityLevel
+from models.Restriction import Restriction
+from models.severity_level import SeverityLevel
 
 class OtherRestriction(Restriction):
     __severity_level: SeverityLevel #if nothing is passed in, it stays as None

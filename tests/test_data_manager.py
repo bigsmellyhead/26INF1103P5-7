@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 import data_manager as dm
 from database.database import Base
 from database.models import User, AuditLog
-from UserProfile import UserProfile
+from models.UserProfile import UserProfile
 
 
 # ==================================================

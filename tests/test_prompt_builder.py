@@ -1,5 +1,5 @@
 
-from prompt_builder import PromptBuilder
+from ai.prompt_builder import PromptBuilder
 
 
 class FakeProfile:

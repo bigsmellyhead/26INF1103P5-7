@@ -1,6 +1,6 @@
 # Data.py
 from abc import ABC, abstractmethod
-from UserProfile import UserProfile
+from models.UserProfile import UserProfile
 # ==========================================
 # AUDIT DATA BRANCH
 # ==========================================

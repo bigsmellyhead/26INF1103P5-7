@@ -11,7 +11,7 @@ import utils
 
 from collections.abc import Callable
 from Data import ResultAuditData
-from UserProfile import UserProfile
+from models.UserProfile import UserProfile
 from allergen_catalog import AllergenCatalog
 from audit_report_renderer import AuditReportRenderer
 from sections import (HeaderSection, UserSummarySection, StallInsightSection, RiskAssessmentSection,

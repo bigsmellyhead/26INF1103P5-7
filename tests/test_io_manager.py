@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import Mock
 
 from io_manager import IOManager
-from UserProfile import UserProfile
+from models.UserProfile import UserProfile
 
 
 # ==================================================

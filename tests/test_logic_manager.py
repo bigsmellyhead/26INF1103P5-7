@@ -3,10 +3,10 @@ import pytest
 
 from logic_manager import LogicManager
 from Data import AIAuditData, ResultAuditData
-from UserProfile import UserProfile
+from models.UserProfile import UserProfile
 from ingredient_tree_processor import IngredientTreeProcessor
 from severity_policy import SeverityPolicy
-from severity_level import SeverityLevel
+from models.severity_level import SeverityLevel
 
 
 # ==========================================================

@@ -1,6 +1,6 @@
 # severity_policy.py
 
-from severity_level import SeverityLevel
+from models.severity_level import SeverityLevel
 from allergen_catalog import AllergenCatalog
 
 

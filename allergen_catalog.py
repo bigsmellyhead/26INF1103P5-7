@@ -1,9 +1,9 @@
-from allergen_grp import AllergenGrp
-from severity_level import SeverityLevel
-from Restriction import Restriction
-from allergen_restriction import AllergenRestriction
-from dietary_restriction import DietaryRestriction
-from other_restriction import OtherRestriction
+from models.allergen_grp import AllergenGrp
+from models.severity_level import SeverityLevel
+from models.Restriction import Restriction
+from models.allergen_restriction import AllergenRestriction
+from models.dietary_restriction import DietaryRestriction
+from models.other_restriction import OtherRestriction
 
 class AllergenCatalog:
     __items: dict[str, list[str]]                       # menu category -> the allergens inside it
@@ -94,24 +94,46 @@ class AllergenCatalog:
     # Building things from names 
     def group_restrictions(self, restrictions, severity=None) -> dict:
         severity = severity or {}
-        ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "severity", "none"} #skipped
-        groups = {"allergies": [], "dietary_restrictions": [], "other": [], "severity": {}}
 
-    for item in restrictions: #To put every name into the right list
-        key = item.strip().lower()
-        if not key or key in ignored_keys:
-            continue                                   #skip blanks and label words
-        if key in KNOWN_ALLERGENS:
-            groups["allergies"].append(key)            # in the allergen catalog
-        elif key in KNOWN_DIETARY:
-            groups["dietary_restrictions"].append(key) # halal, vegan, etc.
-        else:
-            groups["other"].append(key)                # custom. typed in by the user
+        normalised_severity = {
+            name.strip().lower(): level
+            for name, level in severity.items()
+            if isinstance(name, str)
+        }
 
-        # Keep Severity only for items that are actually in the profile
+        groups = {
+            "allergies": [],
+            "dietary_restrictions": [],
+            "other": [],
+            "severity": {}
+        }
+
+        ignored_keys = {
+            "allergies",
+            "dietary_restrictions",
+            "dietary restrictions",
+            "other",
+            "restrictions",
+            "severity",
+            "none"
+        }
+
+        for item in restrictions:
+            key = item.strip().lower()
+
+            if not key or key in ignored_keys:
+                continue
+
+            if self.is_allergen(key):
+                groups["allergies"].append(key)
+            elif self.is_dietary(key):
+                groups["dietary_restrictions"].append(key)
+            else:
+                groups["other"].append(key)
+
         for name in groups["allergies"] + groups["other"]:
-            if name in severity:
-                groups["severity"][name] = severity[name]
+            if name in normalised_severity:
+                groups["severity"][name] = normalised_severity[name]
 
         return groups
 

@@ -3,10 +3,10 @@ import json
 import time
 import logging
 
-from output_schema import OutputSchema
+from ai.output_schema import OutputSchema
 from schema_validator import SchemaValidator
-from prompt_builder import PromptBuilder
-from gemini_client import GeminiClient
+from ai.prompt_builder import PromptBuilder
+from ai.gemini_client import GeminiClient
 from collections.abc import Callable
 
 class AIManager:

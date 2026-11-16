@@ -2,7 +2,7 @@
 import os
 from unittest.mock import Mock
 
-import gemini_client as gc
+import ai.gemini_client as gc
 
 
 class TestGeminiClient:
