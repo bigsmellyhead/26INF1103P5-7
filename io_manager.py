@@ -15,15 +15,11 @@ FlagsSection, DisclaimerSection)
 
 
 class IOManager:
-
-    __load_data : Callable
-    __save_data : Callable
     # Composes a audit renderer that helps to render all sections
     __audit_renderer: AuditReportRenderer
+    __data_manager: DataManager
 
-    def __init__(self, load_data: Callable, save_data: Callable, data_manager: DataManager):
-        self.__load_data = load_data
-        self.__save_data = save_data
+    def __init__(self, data_manager: DataManager):
         self.__data_manager = data_manager
         self.__audit_renderer = AuditReportRenderer(
             [
@@ -281,7 +277,7 @@ class IOManager:
         profile.set_restrictions(restrictions)
 
         # Only now is the profile turned back into a dict (inside DataManager, by the serializer)
-        self.__save_data(profile)
+        self.__data_manager.save_user_profile(profile)
 
     # Input handling for user authentication
     def handle_user_authentication(self) -> UserProfile:
@@ -305,7 +301,7 @@ class IOManager:
             username = "guest"
 
         # Look up this username (DataManager returns a UserProfile, or None if new)
-        profile = self.__load_data(username)
+        profile = self.__data_manager.get_user_profile(username)
 
         if profile:
             # --- Existing user: show their saved data ---

@@ -9,7 +9,7 @@ def main():
     #Initialise all the managers
     data_manager = DataManager()
     logic_manager = LogicManager()
-    io_manager = IOManager(data_manager.get_user_profile, data_manager.save_user_profile, data_manager)
+    io_manager = IOManager(data_manager)
     ai_manager = AIManager(io_manager.display_error)
 
 
