@@ -74,7 +74,7 @@ class RiskAssessmentSection(ReportSection):
         #Analyse Risk Score and assign color codes based on risk score
         risk_level = data.result.get('risk_level', "")
         CURRENT_COLOR = RISK_COLOR_MAP.get(risk_level)
-        
+
 
         safety_status = "SAFE TO EAT" if data.result.get('is_safe') else "NOT SAFE / AVOID"
         #INSERT ASCII ART
@@ -113,7 +113,7 @@ class AllergyConflictSection(ReportSection):
 
     # Also uses the Low/Medium/High colours from utils
     _SEVERITY_TO_RISK = {"LOW": "Low", "MED": "Medium", "HIGH": "High"}
-        
+
 
 
 class DietaryStatusSection(ReportSection):
@@ -127,7 +127,7 @@ class DietaryStatusSection(ReportSection):
         @return None
         """
         dietary_status = data.result.get("dietary_status",{})
-        
+
         if not dietary_status:
             print("🌿 DIETARY STATUS: None")
         else:
@@ -230,7 +230,7 @@ class IngredientBreakdownSection(ReportSection):
             child_insight = child.get("stall_insight")
             if child_insight:
                 print(f"{prefix}{indentation}↳ {COLOR_YELLOW}Stall: {child_insight}{COLOR_RESET}")
-                
+
             if("children" in child):
                 self._print_children_tree(child, prefix + indentation)
 
@@ -249,4 +249,3 @@ class DisclaimerSection(ReportSection):
         print(f"\n{DIVIDER}")
         print("⚠️  ADVISORY DISCLAIMER: This tool is advisory only.")
         print("   Always verify with store owners for safety.")
-        print(f"{DIVIDER}")

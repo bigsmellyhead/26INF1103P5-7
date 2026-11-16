@@ -7,12 +7,11 @@ from severity_level import SeverityLevel
 
 # Takes the AI's already-validated record (schema checks are in ai_manager.py) plus the user's profile,
 # applies deterministic business rules and returns the final ResultAuditData.
-
 # The AI is never the last word on safety. Rules RAISE the score, with ONE narrow, flagged exception:
-# if every conflicting allergen is LOW severity (not life threatening), the dish is capped below High.
-
-# Expects: risk_score, risk_level, stall_knowledge, dietary_status (dict), allergy_conflicts (list of {"restriction", "ingredient", "presence"}), cross_contact_risks, ingredient_tree.
-
+# if every conflicting allergen is LOW severity (user said it is not life-threatening) and nothing else
+# is wrong, the dish is capped below High.
+# Expects: risk_score, risk_level, stall_knowledge, dietary_status (dict), allergy_conflicts (list of
+#          {"restriction", "ingredient", "presence"}), cross_contact_risks, ingredient_tree.
 # Adds: "flags" (reasons whenever a rule changed or questioned the AI) and "severity" on each conflict.
 
 
@@ -20,6 +19,7 @@ class LogicManager:
 
     def __init__(self):
         self._certification_requirements = ["halal", "kosher"]
+        # Composition: LogicManager creates and owns its helpers
         self._tree_processor = IngredientTreeProcessor()
         self._severity_policy = SeverityPolicy()
 
@@ -54,33 +54,37 @@ class LogicManager:
                     data["dietary_status"][item.title()] = "UNCERTAIN"
                     data["flags"].append(f"{item.title()} was not assessed by the AI, so it is marked UNCERTAIN.")
 
-    # Look up the USER's severity for the restriction the AI named. The AI never decides the severity.
-    def _conflict_severity(self, conflict: dict, profile: UserProfile, flags: list) -> SeverityLevel:
+    def _conflict_severity(self, conflict: dict, profile: UserProfile, flags: list) -> str:
+        """Look up the USER's severity for the restriction the AI named. The AI never decides severity."""
         named = conflict.get("restriction", "")
         matches = profile.matching_restrictions(named)
 
         if not matches:
-            worst = self._severity_policy.most_severe([])   # DEFAULT_SEVERITY (HIGH)
-            flags.append(f"The AI linked a conflict to '{named}', which is not in the profile. Treated as {worst.value} severity.")
-            return worst
+            flags.append(f"The AI linked a conflict to '{named}', which is not in the profile. Treated as HIGH severity.")
+            return SeverityLevel.HIGH
 
-        # If the name matches several items (e.g. "egg"), the most severe one counts
-        return self._severity_policy.most_severe([profile.severity_of(name) for name in matches])
+        levels = []
+        for name in matches:
+            saved = profile.severity_of(name)
+            if saved is None:
+                flags.append(f"No severity saved for '{name}', so it is treated as HIGH.")
+            levels.append(self._severity_policy.normalise(saved))
+        return self._severity_policy.most_severe(levels)
 
-    # Raise the score per conflict using severity x presence. Returns the severities found.
-    def _apply_severity_rules(self, data: dict, profile: UserProfile) -> list:   
+    def _apply_severity_rules(self, data: dict, profile: UserProfile) -> list:
+        """Raise the score per conflict using severity x presence. Returns the severities found."""
         severities = []
         for conflict in data["allergy_conflicts"]:
             severity = self._conflict_severity(conflict, profile, data["flags"])
             presence = self._severity_policy.normalise_presence(conflict.get("presence"))
 
-            # Store as plain text on the conflict so the report can show it and MySQL can save it as JSON
-            conflict["severity"] = severity.value
+            # Store on the conflict so the report and the audit log can show it
+            conflict["severity"] = severity
             conflict["presence"] = presence
             severities.append(severity)
 
             floor = self._severity_policy.floor_for(severity, presence)
-            self._raise_score(data, floor, f"{severity.value}-severity '{conflict.get('restriction')}' is {presence.lower()} in the dish.")
+            self._raise_score(data, floor, f"{severity}-severity '{conflict.get('restriction')}' is {presence.lower()} in the dish.")
         return severities
 
     def _apply_risk_band(self, data: dict) -> None:
@@ -123,7 +127,7 @@ class LogicManager:
             if node.get("stall_insight"):
                 data["flags"].append(f"Stall practice affects '{node['name']}': {node['stall_insight']}")
 
-        # 1. Severity-based floor for every allergy conflict
+        # 1. Severity-based floor for every allergy conflict (replaces the old "any conflict -> 60")
         severities = self._apply_severity_rules(data, profile)
 
         # 2. Unverified stall + restrictions + shared equipment + AI saw risk -> not Low
@@ -136,20 +140,16 @@ class LogicManager:
         if uncertain:
             self._raise_score(data, 30, "a dietary requirement is UNCERTAIN.")
 
-        # 4. Trigger ingredients in the tree. When conflicts exist, step 1 already scored them by severity, so a Trigger only adds a rule when the AI did NOT say which allergen it is.
+        # 4. Trigger ingredients in the tree. When conflicts exist, step 1 already scored them by
+        #    severity, so a Trigger only adds a rule when the AI did NOT say which allergen it is.
         if has_conflict and not triggers:
             data["flags"].append("Allergy conflicts were listed but no ingredient is marked Trigger. Verify with the vendor.")
 
         if triggers and not has_conflict:
-            rated = profile.severity_map()
-            if rated:
-                # We don't know WHICH allergen the trigger is, so assume the user's worst one (fail-safe)
-                worst = self._severity_policy.most_severe(rated.values())
-                self._raise_score(data, self._severity_policy.floor_for(worst, SeverityPolicy.POSSIBLE),
-                                  f"a Trigger ingredient has no matching conflict, so your most severe level ({worst.value}) is assumed.")
-            else:
-                # Only dietary requirements (no severity)
-                self._raise_score(data, 30, "an ingredient is marked Trigger in the breakdown.")
+            # We don't know WHICH allergen the trigger is, so assume the user's worst one (fail-safe)
+            worst = self._severity_policy.most_severe(profile.severity_map().values())
+            self._raise_score(data, self._severity_policy.floor_for(worst, SeverityPolicy.POSSIBLE),
+                              f"a Trigger ingredient has no matching conflict, so your most severe level ({worst}) is assumed.")
 
         # 5. Never end up below what the AI itself said
         if data["risk_level"] == "High":

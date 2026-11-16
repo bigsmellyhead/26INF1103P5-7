@@ -56,3 +56,11 @@ class SeverityPolicy:
     def floor_for(self, severity, presence) -> int:
         # Minimum score for one conflict
         return self._FLOORS[(self.normalise(severity), self.normalise_presence(presence))]
+
+    @staticmethod
+    def is_valid_level(level) -> bool:
+        try:
+            SeverityLevel(level)
+            return True
+        except (ValueError, TypeError):
+            return False

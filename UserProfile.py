@@ -57,7 +57,7 @@ class UserProfile:
             return exact
         return [n for n in names if target in n.lower() or n.lower() in target]
 
-    
+
     # Replace all restrictions. Severity for items no longer selected is dropped.
     def set_restrictions(self, allergies, dietary_restrictions, other, severity) -> None:
         self._restrictions = {

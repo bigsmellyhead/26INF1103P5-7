@@ -2,12 +2,17 @@
 
 from pwinput import pwinput
 from data_manager import DataManager
+
 from restriction_menu import RestrictionMenu
+
+
 import utils
+
+
 from collections.abc import Callable
 from Data import ResultAuditData
 from UserProfile import UserProfile
-from allergen_catalog import create_restriction, needs_severity, SEVERITY_DESCRIPTIONS
+from allergen_catalog import create_restriction, needs_severity, SEVERITY_DESCRIPTIONS, group_restrictions
 from audit_report_renderer import AuditReportRenderer
 from sections import (HeaderSection, UserSummarySection, StallInsightSection, RiskAssessmentSection,
 AllergyConflictSection, DietaryStatusSection, CrossContactSection, IngredientBreakdownSection,
@@ -16,14 +21,10 @@ FlagsSection, DisclaimerSection)
 
 class IOManager:
 
-    __load_data : Callable
-    __save_data : Callable
     # Composes a audit renderer that helps to render all sections
     __audit_renderer: AuditReportRenderer
 
-    def __init__(self, load_data: Callable, save_data: Callable, data_manager: DataManager):
-        self.__load_data = load_data
-        self.__save_data = save_data
+    def __init__(self, data_manager: DataManager):
         self.__data_manager = data_manager
         self.__audit_renderer = AuditReportRenderer(
             [
@@ -86,6 +87,14 @@ class IOManager:
         for profile in matches:
             self._display_profile(profile)
 
+
+
+
+
+
+
+
+
     # display a user profile's details (the serializer already cleaned the data)
     def _display_profile(self, profile: UserProfile):
         """Display a user profile's details, with severity where saved."""
@@ -98,6 +107,17 @@ class IOManager:
                 items.append(f"{item} ({level})" if level else item)
 
             print(f"  {category.replace('_', ' ').title()}: {', '.join(items) or 'none'}")
+
+
+
+
+
+
+
+
+
+
+
 
     # Get category selection
     def _get_audit_filter_input(self):
@@ -120,9 +140,9 @@ class IOManager:
         # Escape if no restrictions were selected
         if selected_items is None:
             return
-        
+
         matches = self.__data_manager.filter_audit_history_by_restrictions(selected_items)
-        
+
         self._display_filtered_audit_history(matches, selected_items)
 
     # Output filtered audit history 
@@ -146,7 +166,7 @@ class IOManager:
                 f"\nSafe: {audit.is_safe}"
                 f"\nRisk: {audit.risk_level or 'Unknown'}"
             )
-    
+
     def _run_admin_menu(self):
         """Display the admin menu until the admin chooses to exit."""
         print("\nWelcome, Admin!")
@@ -271,17 +291,34 @@ class IOManager:
         return menu.selected_names() or ["none"]
 
     def _edit_restrictions(self, profile: UserProfile) -> None:
-        """Run the menus, then update the SAME profile object in place and save it."""
-        names = self.prompt_for_restrictions(current=profile.all_restriction_names() or None)
-        severity = self.prompt_for_severity(names, current=profile.severity_map())
+        """Run the menus, update the SAME profile object in place and save it."""
 
-        # build_restrictions -> set of Restriction objects (AllergenRestriction etc.)
+        names = self.prompt_for_restrictions(
+            current=profile.all_restriction_names() or None
+        )
+
+        severity = self.prompt_for_severity(
+            names,
+            current=profile.severity_map()
+        )
+
+        # Build Restriction objects for the severity summary
         restrictions = self.build_restrictions(names, severity)
         self.print_severity_summary(restrictions)
-        profile.set_restrictions(restrictions)
 
-        # Only now is the profile turned back into a dict (inside DataManager, by the serializer)
-        self.__save_data(profile)
+        # Convert restriction names into the format UserProfile expects
+        groups = group_restrictions(names, severity)
+
+        # Update the SAME profile object
+        profile.set_restrictions(
+            groups["allergies"],
+            groups["dietary_restrictions"],
+            groups["other"],
+            groups["severity"]
+        )
+
+        # Save the updated profile
+        self.__data_manager.save_user_profile(profile)
 
     # Input handling for user authentication
     def handle_user_authentication(self) -> UserProfile:
@@ -305,7 +342,7 @@ class IOManager:
             username = "guest"
 
         # Look up this username (DataManager returns a UserProfile, or None if new)
-        profile = self.__load_data(username)
+        profile = self.__data_manager.get_user_profile(username)
 
         if profile:
             # --- Existing user: show their saved data ---
@@ -324,9 +361,18 @@ class IOManager:
                 # --- User wants to change their restrictions (menu opens pre-ticked) ---
                 self._edit_restrictions(profile)
                 saved = profile.all_restriction_names()
+
+
+
+
+
+
+
                 print(f"\nProfile updated! Saved {len(saved)} restriction(s): {', '.join(saved) or 'none'}")
             else:
+
                 print("No updates made.")
+
         else:
             # --- New user: start with an empty profile, then fill it in ---
             print(f"\nNew user detected ('{username}'). Let's set up your dietary profile.")
@@ -409,7 +455,7 @@ class IOManager:
                     break
                 print("Please enter 1,2 or 3.")
         return severity    
-    
+
     def build_restrictions(self, names, severity): #Takes the list of ticked names and turn each one into a restriction object, turning them into a set.
         return {create_restriction(n, severity.get(n)) for n in names if n != "none"}
 
@@ -418,5 +464,4 @@ class IOManager:
             level = getattr(r, "severity_level", None)
             if level:
                 print(f"Severity for ({r.name}): {level.title()}")
-
 
