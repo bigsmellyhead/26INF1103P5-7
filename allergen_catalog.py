@@ -1,107 +1,128 @@
 from allergen_grp import AllergenGrp
 from severity_level import SeverityLevel
+from Restriction import Restriction
 from allergen_restriction import AllergenRestriction
 from dietary_restriction import DietaryRestriction
 from other_restriction import OtherRestriction
 
-ALLERGEN_CATALOG = {
-    "Cereals containing gluten": ["Wheat", "Rye", "Barley", "Oats", "Spelt", "Kamut"],
-    "Crustaceans": ["Prawn", "Shrimp", "Crab", "Lobster", "Crayfish"],
-    "Eggs": ["Chicken egg", "Duck egg", "Quail egg"],
-    "Fish": ["Salmon", "Tuna", "Cod", "Mackerel", "Sardine", "Anchovy (ikan bilis)"],
-    "Peanuts & soybeans": ["Peanut", "Soybean", "Soy sauce", "Tofu", "Tempeh"],
-    "Milk & dairy (incl. lactose)": ["Milk", "Lactose", "Cheese", "Butter", "Cream", "Whey", "Casein"],
-    "Tree nuts": ["Almond", "Brazil nut", "Cashew", "Hazelnut", "Macadamia",
-                  "Pecan", "Pine nut", "Pistachio", "Walnut"]
-}
+class AllergenCatalog:
+    __items: dict[str, list[str]]                       # menu category -> the allergens inside it
+    __dietary: list[str]                                # halal, vegan, etc.
+    __category_to_grp: dict[str, AllergenGrp]           # menu category -> allergen group
+    __severity_descriptions: dict[SeverityLevel, str]   # what LOW / MED / HIGH mean
+    __default_severity: SeverityLevel                   # used when a severity was never recorded
+    __item_to_grp: dict[str, AllergenGrp]               # look up table: each item (lowercase) -> its group
+    __known_allergens: set[str]
+    __known_dietary: set[str]
 
+    def __init__(self) -> None:
+        self.__items = {
+            "Cereals containing gluten": ["Wheat", "Rye", "Barley", "Oats", "Spelt", "Kamut"],
+            "Crustaceans": ["Prawn", "Shrimp", "Crab", "Lobster", "Crayfish"],
+            "Eggs": ["Chicken egg", "Duck egg", "Quail egg"],
+            "Fish": ["Salmon", "Tuna", "Cod", "Mackerel", "Sardine", "Anchovy (ikan bilis)"],
+            "Peanuts & soybeans": ["Peanut", "Soybean", "Soy sauce", "Tofu", "Tempeh"],
+            "Milk & dairy (incl. lactose)": ["Milk", "Lactose", "Cheese", "Butter", "Cream", "Whey", "Casein"],
+            "Tree nuts": ["Almond", "Brazil nut", "Cashew", "Hazelnut", "Macadamia",
+                          "Pecan", "Pine nut", "Pistachio", "Walnut"]
+        }
 
-DIETARY_RESTRICTIONS = ["Halal", "Kosher", "Vegetarian", "Vegan", "No beef", "No pork"]
+        self.__dietary = ["Halal", "Kosher", "Vegetarian", "Vegan", "No beef", "No pork"]
 
-KNOWN_ALLERGENS = {
-    item.lower()
-    for items in ALLERGEN_CATALOG.values()
-    for item in items
-}
-KNOWN_DIETARY = {item.lower() for item in DIETARY_RESTRICTIONS}
+        self.__category_to_grp = {
+            "Cereals containing gluten": AllergenGrp.CEREAL,
+            "Crustaceans": AllergenGrp.CRUSTACEANS,
+            "Eggs": AllergenGrp.EGGS,
+            "Fish": AllergenGrp.FISH,
+            "Peanuts & soybeans": AllergenGrp.PEANUTS_AND_SOYBEANS,
+            "Milk & dairy (incl. lactose)": AllergenGrp.MILK_AND_DAIRY,
+            "Tree nuts": AllergenGrp.TREE_NUTS,
+        }
 
-KNOWN_ITEMS = KNOWN_ALLERGENS | KNOWN_DIETARY
+        #================Severity Section================
+        self.__severity_descriptions = {
+            SeverityLevel.LOW:  "Discomfort only - bloating, stomach upset, mild itch. Passes on its own.",
+            SeverityLevel.MED:  "Clear reaction - hives, swelling, vomiting. May need medication, not life-threatening.",
+            SeverityLevel.HIGH: "Life-threatening - airway closing, difficulty breathing, anaphylaxis. Even traces are dangerous.",
+        }
 
-def group_restrictions(restrictions):
-    ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "none"}
-    groups = {"allergies": [], "dietary_restrictions": [], "other": []}
+        self.__default_severity = SeverityLevel.HIGH #anything not listed
 
-    for item in restrictions:
-        key = item.strip().lower()
-        if not key or key in ignored_keys:
-            continue
-        if key in KNOWN_ALLERGENS:
-            groups["allergies"].append(key)
-        elif key in KNOWN_DIETARY:
-            groups["dietary_restrictions"].append(key)
-        else:
-            groups["other"].append(key)
- 
+        # look up table; each catalog item (lowercase)
+        self.__item_to_grp = {item.lower(): self.__category_to_grp[category]
+                              for category, items in self.__items.items() for item in items}
+        self.__known_allergens = set(self.__item_to_grp)
+        self.__known_dietary = {item.lower() for item in self.__dietary}
 
-    return groups
+    # ---------------- What the menu shows ----------------
+    def categories(self) -> dict[str, list[str]]:
+        return {category: list(items) for category, items in self.__items.items()}
 
-#================Severity Section================
-SEVERITY_DESCRIPTIONS = {
-    SeverityLevel.LOW:  "Discomfort only - bloating, stomach upset, mild itch. Passes on its own.",
-    SeverityLevel.MED:  "Clear reaction - hives, swelling, vomiting. May need medication, not life-threatening.",
-    SeverityLevel.HIGH: "Life-threatening - airway closing, difficulty breathing, anaphylaxis. Even traces are dangerous.",
-}
+    # The dietary Restrictions
+    def dietary_options(self) -> list[str]:
+        return list(self.__dietary)
 
-DEFAULT_SEVERITY = SeverityLevel.HIGH #anything not listed 
+    # What each severity level means - shown when the user is asked
+    def severity_descriptions(self) -> dict[SeverityLevel, str]:
+        return dict(self.__severity_descriptions)
 
-CATEGORY_TO_GRP = {
-    "Cereals containing gluten": AllergenGrp.CEREAL,
-    "Crustaceans": AllergenGrp.CRUSTACEANS,
-    "Eggs": AllergenGrp.EGGS,
-    "Fish": AllergenGrp.FISH,
-    "Peanuts & soybeans": AllergenGrp.PEANUTS_AND_SOYBEANS,
-    "Milk & dairy (incl. lactose)": AllergenGrp.MILK_AND_DAIRY,
-    "Tree nuts": AllergenGrp.TREE_NUTS,
-}
+    # The level assumed when a severity was never recorded
+    def default_severity(self) -> SeverityLevel:
+        return self.__default_severity
 
-ITEM_TO_GRP = {item.lower(): CATEGORY_TO_GRP[cat]
-                for cat, items in ALLERGEN_CATALOG.items() for item in items} # look up table; each catalog item, see if the allergen grp belongs to eg. "chicken eggs", etc
+    # Questions about one name
 
-def needs_severity(name): # Decides whether to ask the "How severely does this affect you?" question
-    key = name.strip().lower()
-    return bool(key) and key != "none" and key not in KNOWN_DIETARY
+    def is_allergen(self, name: str) -> bool:
+        return name.strip().lower() in self.__known_allergens
 
-def group_restrictions(restrictions, severity=None): #Sorts a flat list of names into the dictionary that gets saved to the database
-    severity = severity or {}
-    ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "severity", "none"} #skipped
-    groups = {"allergies": [], "dietary_restrictions": [], "other": [], "severity": {}} 
+    def is_dietary(self, name: str) -> bool:
+        return name.strip().lower() in self.__known_dietary
 
-    for item in restrictions: #To put every name into the right list
-        key = item.strip().lower()
-        if not key or key in ignored_keys:
-            continue                                   #skip blanks and label words
-        if key in KNOWN_ALLERGENS:
-            groups["allergies"].append(key)            # in the allergen catalog
-        elif key in KNOWN_DIETARY:
-            groups["dietary_restrictions"].append(key) # halal, vegan, etc.
-        else:
-            groups["other"].append(key)                # custom. typed in by the user
+    # True if the name is anywhere in the catalog (False means the user typed it in)
+    def is_known(self, name: str) -> bool:
+        return self.is_allergen(name) or self.is_dietary(name)
+
+    # The allergen group of an item, or None if it is not a catalog allergen
+    def group_of(self, name: str) -> AllergenGrp | None:
+        return self.__item_to_grp.get(name.strip().lower())
+
+    # Deciding factor How severely does this affects you
+    def needs_severity(self, name: str) -> bool:
+        key = name.strip().lower()
+        return bool(key) and key != "none" and not self.is_dietary(key)
+
+    # Building things from names 
+    def group_restrictions(self, restrictions, severity=None) -> dict:
+        severity = severity or {}
+        ignored_keys = {"allergies", "dietary_restrictions", "dietary restrictions", "other", "restrictions", "severity", "none"} #skipped
+        groups = {"allergies": [], "dietary_restrictions": [], "other": [], "severity": {}}
+
+        for item in restrictions: #To put every name into the right list
+            key = item.strip().lower()
+            if not key or key in ignored_keys:
+                continue                                   #skip blanks and label words
+            if self.is_allergen(key):
+                groups["allergies"].append(key)            # in the allergen catalog
+            elif self.is_dietary(key):
+                groups["dietary_restrictions"].append(key) # halal, vegan, etc.
+            else:
+                groups["other"].append(key)                # custom. typed in by the user
 
         # Keep Severity only for items that are actually in the profile
-    for name in groups["allergies"] + groups["other"]:
-        if name in severity:
-            groups["severity"][name] = severity[name]
+        for name in groups["allergies"] + groups["other"]:
+            if name in severity:
+                groups["severity"][name] = severity[name]
 
-    return groups    
+        return groups
 
-def create_restriction(name, severity=None):
-    key = name.strip().lower() #key meaning the name of the item itself. Eg. Chicken Egg
-    if key in KNOWN_DIETARY:
-        return DietaryRestriction(key)
+    # Turns one name into the right Restriction Object
+    def create_restriction(self, name: str, severity=None) -> Restriction:
+        key = name.strip().lower() #key meaning the name of the item itself. Eg. Chicken Egg
+        if self.is_dietary(key):
+            return DietaryRestriction(key)
 
-    level = SeverityLevel(severity) if severity else DEFAULT_SEVERITY #If no severity was given (e.g. an old profile), fall back to DEFAULT_SEVERITY
-    if key in ITEM_TO_GRP:
-        return AllergenRestriction(key, ITEM_TO_GRP[key], level)
-    return OtherRestriction(key, level)
-
-
+        level = SeverityLevel(severity) if severity else self.__default_severity #If no severity was given (e.g. an old profile), fall back to Default
+        group = self.group_of(key)
+        if group:
+            return AllergenRestriction(key, group, level)
+        return OtherRestriction(key, level)
