@@ -1,6 +1,5 @@
 # logic_manager.py
 from Data import AIAuditData, ResultAuditData
-from EventName import EventName
 from ingredient_tree_processor import IngredientTreeProcessor
 
 # Takes the AI's already-validated record (schema checks are in ai_manager.py) plus the user's restrictions, applies deterministic business rules and raises the final record on the Bus.
