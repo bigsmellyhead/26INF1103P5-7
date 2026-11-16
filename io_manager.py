@@ -88,14 +88,6 @@ class IOManager:
         for profile in matches:
             self._display_profile(profile)
 
-
-
-
-
-
-
-
-
     # display a user profile's details (the serializer already cleaned the data)
     def _display_profile(self, profile: UserProfile):
         """Display a user profile's details, with severity where saved."""
