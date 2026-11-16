@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import data_manager as dm
+import database.data_manager as dm
 from database.database import Base
 from database.models import User, AuditLog
 from models.UserProfile import UserProfile
@@ -94,7 +94,7 @@ def sample_audit_record():
 class TestDataManagerInitialization:
 
     def test_data_manager_creates_serializer(self, data_manager):
-        from profile_serializer import ProfileSerializer
+        from database.profile_serializer import ProfileSerializer
 
         assert isinstance(data_manager._serializer, ProfileSerializer)
 

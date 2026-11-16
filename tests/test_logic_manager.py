@@ -1,11 +1,11 @@
 
 import pytest
 
-from logic_manager import LogicManager
+from logic.logic_manager import LogicManager
 from Data import AIAuditData, ResultAuditData
 from models.UserProfile import UserProfile
-from ingredient_tree_processor import IngredientTreeProcessor
-from severity_policy import SeverityPolicy
+from logic.ingredient_tree_processor import IngredientTreeProcessor
+from logic.severity_policy import SeverityPolicy
 from models.severity_level import SeverityLevel
 
 

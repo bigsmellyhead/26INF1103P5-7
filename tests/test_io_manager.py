@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import Mock
 
-from io_manager import IOManager
+from io_items.io_manager import IOManager
 from models.UserProfile import UserProfile
 
 
@@ -38,7 +38,7 @@ class TestIOManagerAuthentication:
         io_manager, _ = setup_io_manager
 
         monkeypatch.setattr(
-            "io_manager.pwinput",
+            "io_items.io_manager.pwinput",
             lambda *args, **kwargs: "Admin123"
         )
 
@@ -58,7 +58,7 @@ class TestIOManagerAuthentication:
         io_manager, _ = setup_io_manager
 
         monkeypatch.setattr(
-            "io_manager.pwinput",
+            "io_items.io_manager.pwinput",
             lambda *args, **kwargs: "wrong_password"
         )
 

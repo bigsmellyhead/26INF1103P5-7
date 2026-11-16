@@ -1,5 +1,5 @@
 
-from schema_validator import SchemaValidator
+from ai.schema_validator import SchemaValidator
 
 
 class TestSchemaValidator:

@@ -3,7 +3,7 @@ import json
 import logging
 from unittest.mock import Mock
 
-import ai_manager as am
+import ai.ai_manager as am
 
 
 class TestAIManager:

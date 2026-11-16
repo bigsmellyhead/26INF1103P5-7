@@ -1,7 +1,7 @@
-from io_manager import IOManager
-from ai_manager import AIManager
-from logic_manager import LogicManager
-from data_manager import DataManager
+from io_items.io_manager import IOManager
+from ai.ai_manager import AIManager
+from logic.logic_manager import LogicManager
+from database.data_manager import DataManager
 from Data import AIAuditData
 
 
